@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRequireAuth } from '@/hooks/useAuth';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { useCategories, useAllMenuItems } from '@/hooks/useMenu';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,6 +32,9 @@ import { toast } from 'sonner';
 import type { Category, MenuItem } from '@/types/database';
 
 export default function AdminMenuPage() {
+  // Admin-only page
+  const { loading: authLoading } = useRequireAuth('admin');
+  
   const queryClient = useQueryClient();
   const { data: categories, isLoading: categoriesLoading } = useCategories();
   const { data: menuItems, isLoading: menuLoading } = useAllMenuItems();

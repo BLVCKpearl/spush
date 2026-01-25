@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useRequireAuth } from '@/hooks/useAuth';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { useAllBankDetails, useCreateBankDetails, useUpdateBankDetails } from '@/hooks/useBankDetails';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +21,9 @@ import { toast } from 'sonner';
 import type { BankDetails } from '@/types/database';
 
 export default function AdminBankDetailsPage() {
+  // Admin-only page
+  const { loading: authLoading } = useRequireAuth('admin');
+  
   const { data: bankDetails, isLoading } = useAllBankDetails();
   const createBankDetails = useCreateBankDetails();
   const updateBankDetails = useUpdateBankDetails();

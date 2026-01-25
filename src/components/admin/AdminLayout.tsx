@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { 
   LayoutDashboard, 
   ClipboardList, 
@@ -17,14 +18,21 @@ interface AdminLayoutProps {
   title: string;
 }
 
-const navItems = [
+interface NavItem {
+  to: string;
+  label: string;
+  icon: React.ElementType;
+  adminOnly?: boolean;
+}
+
+const navItems: NavItem[] = [
   { to: '/admin/orders', label: 'Orders', icon: ClipboardList },
-  { to: '/admin/menu', label: 'Menu', icon: UtensilsCrossed },
-  { to: '/admin/bank-details', label: 'Bank Details', icon: CreditCard },
+  { to: '/admin/menu', label: 'Menu', icon: UtensilsCrossed, adminOnly: true },
+  { to: '/admin/bank-details', label: 'Bank Details', icon: CreditCard, adminOnly: true },
 ];
 
 export default function AdminLayout({ children, title }: AdminLayoutProps) {
-  const { user, isAdmin, loading, signOut } = useAuth();
+  const { user, role, isAdmin, isStaff, loading, signOut } = useAuth();
   const navigate = useNavigate();
 
   if (loading) {
@@ -35,7 +43,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
     );
   }
 
-  if (!user || !isAdmin) {
+  if (!user || (!isAdmin && !isStaff)) {
     navigate('/admin/login');
     return null;
   }
@@ -46,6 +54,11 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
     navigate('/admin/login');
   };
 
+  // Filter nav items based on role
+  const visibleNavItems = navItems.filter(item => 
+    !item.adminOnly || isAdmin
+  );
+
   return (
     <div className="min-h-screen bg-background">
       {/* Top Navigation */}
@@ -54,16 +67,24 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
           <div className="flex items-center gap-4">
             <LayoutDashboard className="h-6 w-6" />
             <h1 className="font-semibold hidden sm:block">Restaurant Admin</h1>
+            <Badge variant={isAdmin ? "default" : "secondary"} className="text-xs">
+              {isAdmin ? 'Admin' : 'Staff'}
+            </Badge>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleSignOut}>
-            <LogOut className="h-4 w-4 mr-2" />
-            <span className="hidden sm:inline">Sign Out</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground hidden md:block">
+              {user.email}
+            </span>
+            <Button variant="ghost" size="sm" onClick={handleSignOut}>
+              <LogOut className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </Button>
+          </div>
         </div>
         
         {/* Tab Navigation */}
         <nav className="flex border-t overflow-x-auto">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

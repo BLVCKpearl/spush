@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useRequireAuth } from '@/hooks/useAuth';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { useOrders, useUpdateOrderStatus, useConfirmPayment } from '@/hooks/useOrders';
 import { formatNaira } from '@/lib/currency';
@@ -44,6 +45,9 @@ const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType
 const statusFlow: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'completed'];
 
 export default function AdminOrdersPage() {
+  // Both admin and staff can access this page
+  const { loading: authLoading } = useRequireAuth('any');
+  
   const [activeTab, setActiveTab] = useState<string>('active');
   const { data: orders, isLoading } = useOrders();
   const updateStatus = useUpdateOrderStatus();
