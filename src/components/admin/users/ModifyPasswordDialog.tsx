@@ -93,8 +93,6 @@ export default function ModifyPasswordDialog({
     onOpenChange(false);
   };
 
-  if (!user) return null;
-
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
@@ -105,7 +103,7 @@ export default function ModifyPasswordDialog({
           </DialogTitle>
           <DialogDescription>
             Set a new password for{' '}
-            <span className="font-medium">{user.display_name || user.email}</span>.
+            <span className="font-medium">{user?.display_name || user?.email || 'this user'}</span>.
           </DialogDescription>
         </DialogHeader>
 
@@ -155,7 +153,7 @@ export default function ModifyPasswordDialog({
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || !user}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
