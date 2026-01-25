@@ -8,6 +8,7 @@ import {
   ClipboardList, 
   UtensilsCrossed, 
   CreditCard,
+  BarChart3,
   LogOut,
   Loader2
 } from 'lucide-react';
@@ -27,6 +28,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/admin/orders', label: 'Orders', icon: ClipboardList },
+  { to: '/admin/analytics', label: 'Analytics', icon: BarChart3, adminOnly: true },
   { to: '/admin/menu', label: 'Menu', icon: UtensilsCrossed, adminOnly: true },
   { to: '/admin/bank-details', label: 'Bank Details', icon: CreditCard, adminOnly: true },
 ];
