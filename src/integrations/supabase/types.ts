@@ -552,6 +552,7 @@ export type Database = {
       check_order_rate_limit: { Args: { p_table_id: string }; Returns: boolean }
       expire_pending_orders: { Args: never; Returns: number }
       generate_order_reference: { Args: never; Returns: string }
+      generate_qr_token: { Args: never; Returns: string }
       get_order_expiry_minutes: {
         Args: { p_venue_id: string }
         Returns: number
