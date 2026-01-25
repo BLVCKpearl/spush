@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useOrder, useUploadPaymentProof } from '@/hooks/useOrders';
+import { useOrder } from '@/hooks/useOrders';
 import { useBankDetails } from '@/hooks/useBankDetails';
 import { useTableSession } from '@/hooks/useTableSession';
 import { usePaymentClaims } from '@/hooks/usePaymentClaims';
@@ -16,8 +16,6 @@ import {
   Bell, 
   Loader2,
   Copy,
-  Upload,
-  Image as ImageIcon,
   Banknote,
   CreditCard,
   AlertCircle,
@@ -41,15 +39,11 @@ const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType
 export default function OrderConfirmationPage() {
   const { reference } = useParams<{ reference: string }>();
   const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const { session } = useTableSession();
   
   const { data: order, isLoading } = useOrder(reference || '');
   const { data: bankDetails } = useBankDetails(order?.venue_id);
   const { data: paymentClaims } = usePaymentClaims(order?.id);
-  const uploadProof = useUploadPaymentProof();
-  
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
 
   const hasClaim = paymentClaims && paymentClaims.length > 0;
@@ -92,30 +86,7 @@ export default function OrderConfirmationPage() {
     toast.success(`${label} copied to clipboard`);
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
-  };
 
-  const handleUploadProof = async () => {
-    if (!selectedFile) return;
-    
-    try {
-      await uploadProof.mutateAsync({
-        orderId: order.id,
-        file: selectedFile,
-      });
-      setSelectedFile(null);
-      toast.success('Payment proof uploaded successfully!');
-    } catch (error) {
-      console.error('Failed to upload proof:', error);
-      toast.error('Failed to upload payment proof');
-    }
-  };
-
-  const hasUploadedProof = order.payment_proofs && order.payment_proofs.length > 0;
 
   // Use item snapshot for display, fallback to menu_items
   const getItemName = (item: typeof order.order_items[0]) => {
@@ -270,57 +241,6 @@ export default function OrderConfirmationPage() {
                 </Button>
               </div>
 
-              {/* Upload Payment Proof */}
-              <div className="pt-2">
-                <p className="text-sm font-medium mb-3">Upload Payment Proof (Optional)</p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-                
-                {hasUploadedProof ? (
-                  <div className="flex items-center gap-2 text-green-600 bg-green-50 dark:bg-green-950 p-3 rounded-lg">
-                    <CheckCircle2 className="h-5 w-5" />
-                    <span className="text-sm">Payment proof uploaded</span>
-                  </div>
-                ) : selectedFile ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 bg-muted p-3 rounded-lg">
-                      <ImageIcon className="h-5 w-5 text-muted-foreground" />
-                      <span className="text-sm flex-1 truncate">{selectedFile.name}</span>
-                    </div>
-                    <Button 
-                      className="w-full"
-                      onClick={handleUploadProof}
-                      disabled={uploadProof.isPending}
-                    >
-                      {uploadProof.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Uploading...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="mr-2 h-4 w-4" />
-                          Upload Proof
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                ) : (
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <ImageIcon className="mr-2 h-4 w-4" />
-                    Select Image
-                  </Button>
-                )}
-              </div>
             </CardContent>
           </Card>
         )}

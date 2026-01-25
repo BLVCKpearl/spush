@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useCreatePaymentClaim } from '@/hooks/usePaymentClaims';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Upload, Loader2, CheckCircle2, ImageIcon } from 'lucide-react';
+import { Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface PaymentClaimDialogProps {
@@ -33,33 +33,13 @@ export function PaymentClaimDialog({
   const [senderName, setSenderName] = useState('');
   const [bankName, setBankName] = useState('');
   const [notes, setNotes] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const createClaim = useCreatePaymentClaim();
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (!file.type.startsWith('image/')) {
-        toast.error('Please select an image file');
-        return;
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('File size must be less than 5MB');
-        return;
-      }
-      setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
-    }
-  };
 
   const handleSubmit = async () => {
     try {
       await createClaim.mutateAsync({
         orderId,
-        proofFile: selectedFile || undefined,
         senderName: senderName.trim() || undefined,
         bankName: bankName.trim() || undefined,
         notes: notes.trim() || undefined,
@@ -78,8 +58,6 @@ export function PaymentClaimDialog({
     setSenderName('');
     setBankName('');
     setNotes('');
-    setSelectedFile(null);
-    setPreviewUrl(null);
   };
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -100,51 +78,6 @@ export function PaymentClaimDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Proof Upload */}
-          <div className="space-y-2">
-            <Label>Transfer Receipt (Optional)</Label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-            
-            {previewUrl ? (
-              <div className="relative">
-                <img
-                  src={previewUrl}
-                  alt="Transfer proof preview"
-                  className="w-full h-40 object-cover rounded-md border"
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="absolute top-2 right-2"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  Change
-                </Button>
-              </div>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full h-24 border-dashed"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <div className="flex flex-col items-center gap-2">
-                  <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    Upload receipt screenshot
-                  </span>
-                </div>
-              </Button>
-            )}
-          </div>
-
           {/* Sender Name */}
           <div className="space-y-2">
             <Label htmlFor="senderName">Sender Name (Optional)</Label>
