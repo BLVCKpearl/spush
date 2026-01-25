@@ -76,3 +76,23 @@ export interface CartItem {
   menuItem: MenuItem;
   quantity: number;
 }
+
+export interface Venue {
+  id: string;
+  venue_slug: string;
+  name: string;
+  created_at: string;
+}
+
+export interface Table {
+  id: string;
+  venue_id: string;
+  label: string;
+  qr_token: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface TableWithVenue extends Table {
+  venues: Venue;
+}

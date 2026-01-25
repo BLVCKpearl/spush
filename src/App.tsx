@@ -10,6 +10,8 @@ import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import OrderConfirmationPage from "./pages/OrderConfirmationPage";
 import TrackOrderPage from "./pages/TrackOrderPage";
+import VenueTableResolver from "./pages/VenueTableResolver";
+import VenueMenuPage from "./pages/VenueMenuPage";
 import AdminLoginPage from "./pages/admin/AdminLoginPage";
 import AdminOrdersPage from "./pages/admin/AdminOrdersPage";
 import AdminMenuPage from "./pages/admin/AdminMenuPage";
@@ -27,6 +29,8 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/v/:venueSlug" element={<VenueTableResolver />} />
+            <Route path="/menu/:venueSlug" element={<VenueMenuPage />} />
             <Route path="/order" element={<OrderPage />} />
             <Route path="/cart" element={<CartPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />

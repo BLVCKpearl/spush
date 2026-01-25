@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import type { MenuItem, CartItem } from '@/types/database';
+import { getStoredSession, type TableSession } from '@/hooks/useTableSession';
 
 interface CartContextType {
   items: CartItem[];
   tableNumber: number | null;
+  tableSession: TableSession | null;
   setTableNumber: (table: number) => void;
   addItem: (menuItem: MenuItem) => void;
   removeItem: (menuItemId: string) => void;
@@ -18,6 +20,16 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [tableNumber, setTableNumber] = useState<number | null>(null);
+  const [tableSession, setTableSession] = useState<TableSession | null>(() => getStoredSession());
+
+  // Sync table session from localStorage
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setTableSession(getStoredSession());
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   const addItem = useCallback((menuItem: MenuItem) => {
     setItems((prev) => {
@@ -69,6 +81,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       value={{
         items,
         tableNumber,
+        tableSession,
         setTableNumber,
         addItem,
         removeItem,
