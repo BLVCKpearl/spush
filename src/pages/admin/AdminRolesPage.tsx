@@ -185,8 +185,10 @@ export default function AdminRolesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Current Roles</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>User ID</TableHead>
+                <TableHead>Roles</TableHead>
                 <TableHead>Add Role</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -194,25 +196,21 @@ export default function AdminRolesPage() {
             <TableBody>
               {users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     No users with roles found
                   </TableCell>
                 </TableRow>
               ) : (
                 users.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium">
-                          {user.displayName || 'Unknown User'}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {user.email || 'No email'}
-                        </div>
-                        <div className="text-xs text-muted-foreground font-mono">
-                          {user.id.slice(0, 8)}...
-                        </div>
-                      </div>
+                    <TableCell className="font-medium">
+                      {user.displayName || 'Unknown User'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {user.email || 'No email'}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {user.id.slice(0, 8)}...
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2 flex-wrap">
