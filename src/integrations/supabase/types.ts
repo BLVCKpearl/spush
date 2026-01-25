@@ -232,6 +232,47 @@ export type Database = {
           },
         ]
       }
+      payment_claims: {
+        Row: {
+          bank_name: string | null
+          claimed_at: string
+          created_at: string
+          id: string
+          notes: string | null
+          order_id: string
+          proof_url: string | null
+          sender_name: string | null
+        }
+        Insert: {
+          bank_name?: string | null
+          claimed_at?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          order_id: string
+          proof_url?: string | null
+          sender_name?: string | null
+        }
+        Update: {
+          bank_name?: string | null
+          claimed_at?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          order_id?: string
+          proof_url?: string | null
+          sender_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_claims_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_proofs: {
         Row: {
           id: string
