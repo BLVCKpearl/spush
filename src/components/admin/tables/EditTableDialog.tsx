@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,20 +43,20 @@ export function EditTableDialog({
   const form = useForm({
     resolver: zodResolver(editSchema),
     defaultValues: {
-      label: table?.label ?? '',
-      active: table?.active ?? true,
+      label: '',
+      active: true,
     },
   });
 
-  // Reset form when table changes
-  useState(() => {
-    if (table) {
+  // Reset form when table changes or dialog opens
+  useEffect(() => {
+    if (table && open) {
       form.reset({
         label: table.label,
         active: table.active,
       });
     }
-  });
+  }, [table, open, form]);
 
   const handleSubmit = async (data: z.infer<typeof editSchema>) => {
     if (!table) return;
@@ -70,6 +71,9 @@ export function EditTableDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Edit Table</DialogTitle>
+          <DialogDescription>
+            Update the table label or toggle its active status.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">

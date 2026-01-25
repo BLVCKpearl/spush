@@ -6,6 +6,7 @@ import { useVenues } from '@/hooks/useVenues';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -47,8 +48,6 @@ import {
   RefreshCw,
   Download,
   Loader2,
-  CheckCircle2,
-  XCircle,
   Package,
 } from 'lucide-react';
 import { TableQRDialog } from '@/components/admin/tables/TableQRDialog';
@@ -252,17 +251,18 @@ export default function AdminTablesPage() {
                         {table.venues.name}
                       </TableCell>
                       <TableCell>
-                        {table.active ? (
-                          <Badge variant="default" className="gap-1">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Active
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="gap-1">
-                            <XCircle className="h-3 w-3" />
-                            Inactive
-                          </Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={table.active}
+                            onCheckedChange={(checked) => {
+                              updateTable.mutate({ id: table.id, active: checked });
+                            }}
+                            disabled={updateTable.isPending}
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            {table.active ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {new Date(table.created_at).toLocaleDateString()}
