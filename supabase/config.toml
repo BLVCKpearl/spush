@@ -2,3 +2,12 @@ project_id = "bcyjsaekneejgfhddwru"
 
 [functions.expire-orders]
 verify_jwt = false
+
+[functions.manage-users]
+verify_jwt = false
+
+[functions.get-bank-details]
+verify_jwt = false
+
+[functions.get-signed-proof-url]
+verify_jwt = false
