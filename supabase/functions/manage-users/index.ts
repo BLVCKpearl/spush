@@ -175,11 +175,31 @@ Deno.serve(async (req) => {
           );
         }
 
-        // The profile will be created by the trigger, but update display_name and set must_change_password
-        await supabaseAdmin
-          .from("profiles")
-          .update({ display_name: fullName, must_change_password: true })
-          .eq("user_id", newUser.user.id);
+        // The profile is created by the trigger on auth.users insert
+        // We need to wait briefly and retry to ensure it exists before updating
+        let profileUpdated = false;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const { data: profile } = await supabaseAdmin
+            .from("profiles")
+            .select("id")
+            .eq("user_id", newUser.user.id)
+            .maybeSingle();
+          
+          if (profile) {
+            await supabaseAdmin
+              .from("profiles")
+              .update({ display_name: fullName, must_change_password: true })
+              .eq("user_id", newUser.user.id);
+            profileUpdated = true;
+            break;
+          }
+          // Wait 100ms before retry
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        
+        if (!profileUpdated) {
+          console.error("Profile not created by trigger after 5 attempts");
+        }
 
         // Assign role
         const { error: roleError } = await supabaseAdmin.from("user_roles").insert({
