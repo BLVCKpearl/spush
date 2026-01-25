@@ -9,6 +9,7 @@ import {
   UtensilsCrossed, 
   CreditCard,
   BarChart3,
+  Users,
   LogOut,
   Loader2
 } from 'lucide-react';
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
   { to: '/admin/analytics', label: 'Analytics', icon: BarChart3, adminOnly: true },
   { to: '/admin/menu', label: 'Menu', icon: UtensilsCrossed, adminOnly: true },
   { to: '/admin/bank-details', label: 'Bank Details', icon: CreditCard, adminOnly: true },
+  { to: '/admin/roles', label: 'Roles', icon: Users, adminOnly: true },
 ];
 
 export default function AdminLayout({ children, title }: AdminLayoutProps) {
