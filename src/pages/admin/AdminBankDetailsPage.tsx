@@ -45,11 +45,9 @@ export default function AdminBankDetailsPage() {
 
   const handleSetActive = async (details: BankDetails) => {
     try {
-      // Deactivate all others first (handled in mutation)
-      await createBankDetails.mutateAsync({
-        bank_name: details.bank_name,
-        account_name: details.account_name,
-        account_number: details.account_number,
+      // Update existing record to be active
+      await updateBankDetails.mutateAsync({
+        id: details.id,
         is_active: true,
       });
       toast.success('Bank details set as active');
@@ -191,6 +189,7 @@ function BankDetailsForm({
     e.preventDefault();
     if (bankName.trim() && accountName.trim() && accountNumber.trim()) {
       onSubmit({
+        venue_id: details?.venue_id || null,
         bank_name: bankName.trim(),
         account_name: accountName.trim(),
         account_number: accountNumber.trim(),

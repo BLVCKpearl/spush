@@ -41,7 +41,7 @@ export default function OrderConfirmationPage() {
   const { session } = useTableSession();
   
   const { data: order, isLoading } = useOrder(reference || '');
-  const { data: bankDetails } = useBankDetails();
+  const { data: bankDetails } = useBankDetails(order?.venue_id);
   const uploadProof = useUploadPaymentProof();
   
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -221,33 +221,45 @@ export default function OrderConfirmationPage() {
                   <span className="font-medium text-right">{bankDetails.account_name}</span>
                 </div>
                 <Separator />
-                <div className="flex justify-between items-center">
+                <div>
                   <span className="text-sm text-muted-foreground">Account Number</span>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-lg">{bankDetails.account_number}</span>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8"
-                      onClick={() => copyToClipboard(bankDetails.account_number, 'Account number')}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="font-bold text-2xl font-mono tracking-wider">{bankDetails.account_number}</span>
                   </div>
+                  <Button 
+                    className="w-full mt-2"
+                    variant="secondary"
+                    size="lg"
+                    onClick={() => copyToClipboard(bankDetails.account_number, 'Account number')}
+                  >
+                    <Copy className="mr-2 h-5 w-5" />
+                    Copy Account Number
+                  </Button>
                 </div>
                 <Separator />
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Amount</span>
+                  <span className="text-sm text-muted-foreground">Amount to Transfer</span>
                   <span className="font-bold text-xl text-primary">
                     {formatNaira(order.total_kobo)}
                   </span>
                 </div>
               </div>
               
-              <div className="bg-amber-100 dark:bg-amber-900 rounded-lg p-3">
-                <p className="text-sm text-amber-800 dark:text-amber-200 text-center">
-                  <strong>Important:</strong> Include <strong>{order.order_reference}</strong> as your transfer narration
+              {/* Reference with big copy button */}
+              <div className="bg-amber-100 dark:bg-amber-900 rounded-lg p-4 space-y-3">
+                <p className="text-sm text-amber-800 dark:text-amber-200 text-center font-medium">
+                  Use this reference as your transfer narration:
                 </p>
+                <p className="text-2xl font-bold text-center text-amber-900 dark:text-amber-100 tracking-wider">
+                  {order.order_reference}
+                </p>
+                <Button 
+                  className="w-full"
+                  onClick={() => copyToClipboard(order.order_reference, 'Reference')}
+                >
+                  <Copy className="mr-2 h-5 w-5" />
+                  Copy Reference
+                </Button>
               </div>
 
               {/* Upload Payment Proof */}

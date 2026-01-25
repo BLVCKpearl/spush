@@ -76,6 +76,7 @@ export interface PaymentProof {
 
 export interface BankDetails {
   id: string;
+  venue_id: string | null;
   bank_name: string;
   account_name: string;
   account_number: string;

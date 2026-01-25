@@ -22,6 +22,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          venue_id: string | null
         }
         Insert: {
           account_name: string
@@ -30,6 +31,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          venue_id?: string | null
         }
         Update: {
           account_name?: string
@@ -38,8 +40,17 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          venue_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "bank_details_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       categories: {
         Row: {

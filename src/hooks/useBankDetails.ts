@@ -2,19 +2,25 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { BankDetails } from '@/types/database';
 
-export function useBankDetails() {
+export function useBankDetails(venueId?: string | null) {
   return useQuery({
-    queryKey: ['bank-details'],
+    queryKey: ['bank-details', venueId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('bank_details')
         .select('*')
-        .eq('is_active', true)
-        .maybeSingle();
+        .eq('is_active', true);
+      
+      if (venueId) {
+        query = query.eq('venue_id', venueId);
+      }
+      
+      const { data, error } = await query.maybeSingle();
       
       if (error) throw error;
       return data as BankDetails | null;
     },
+    enabled: !!venueId,
   });
 }
 
