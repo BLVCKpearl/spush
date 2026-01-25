@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSignedProofUrl } from '@/hooks/useSignedProofUrl';
-import { ImageIcon, Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 
 interface SecureProofImageProps {
   proofUrl: string | null;

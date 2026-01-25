@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_audit_logs: {
+        Row: {
+          action: string
+          actor_user_id: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
       bank_details: {
         Row: {
           account_name: string
@@ -304,6 +331,24 @@ export type Database = {
           },
         ]
       }
+      password_reset_rate_limits: {
+        Row: {
+          created_at: string
+          id: string
+          target_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          target_user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          target_user_id?: string
+        }
+        Relationships: []
+      }
       payment_claims: {
         Row: {
           bank_name: string | null
@@ -418,6 +463,7 @@ export type Database = {
           display_name: string | null
           email: string | null
           id: string
+          is_active: boolean
           updated_at: string
           user_id: string
         }
@@ -426,6 +472,7 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id?: string
+          is_active?: boolean
           updated_at?: string
           user_id: string
         }
@@ -434,6 +481,7 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id?: string
+          is_active?: boolean
           updated_at?: string
           user_id?: string
         }
@@ -585,6 +633,11 @@ export type Database = {
     }
     Functions: {
       check_order_rate_limit: { Args: { p_table_id: string }; Returns: boolean }
+      check_password_reset_rate_limit: {
+        Args: { p_target_user_id: string }
+        Returns: boolean
+      }
+      count_active_admins: { Args: never; Returns: number }
       expire_pending_orders: { Args: never; Returns: number }
       generate_order_reference: { Args: never; Returns: string }
       generate_qr_token: { Args: never; Returns: string }
@@ -608,6 +661,10 @@ export type Database = {
       is_staff: { Args: never; Returns: boolean }
       record_order_rate_limit: {
         Args: { p_table_id: string }
+        Returns: undefined
+      }
+      record_password_reset_attempt: {
+        Args: { p_target_user_id: string }
         Returns: undefined
       }
       resolve_qr_token: {

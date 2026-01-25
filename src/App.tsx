@@ -19,6 +19,7 @@ import AdminMenuPage from "./pages/admin/AdminMenuPage";
 import AdminBankDetailsPage from "./pages/admin/AdminBankDetailsPage";
 import AdminRolesPage from "./pages/admin/AdminRolesPage";
 import AdminTablesPage from "./pages/admin/AdminTablesPage";
+import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +49,7 @@ const App = () => (
             <Route path="/admin/bank-details" element={<AdminBankDetailsPage />} />
             <Route path="/admin/roles" element={<AdminRolesPage />} />
             <Route path="/admin/tables" element={<AdminTablesPage />} />
+            <Route path="/admin/users" element={<AdminUsersPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
