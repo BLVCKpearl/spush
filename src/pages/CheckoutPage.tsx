@@ -64,7 +64,8 @@ export default function CheckoutPage() {
 
       clearCart();
       toast.success('Order placed successfully!');
-      navigate(`/track/${order.order_reference}`);
+      // Redirect to confirmation page with order reference
+      navigate(`/order-confirmation/${order.order_reference}`);
     } catch (error) {
       console.error('Failed to place order:', error);
       toast.error('Failed to place order. Please try again.');

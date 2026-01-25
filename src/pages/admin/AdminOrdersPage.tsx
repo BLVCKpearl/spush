@@ -20,18 +20,23 @@ import {
   ChefHat, 
   Bell, 
   Image as ImageIcon,
-  Loader2
+  Loader2,
+  Banknote,
+  CreditCard,
+  XCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { OrderStatus, OrderWithItems } from '@/types/database';
 
 const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   pending: { label: 'Pending', icon: Clock, variant: 'secondary' },
+  pending_payment: { label: 'Awaiting Payment', icon: CreditCard, variant: 'outline' },
+  cash_on_delivery: { label: 'Cash on Delivery', icon: Banknote, variant: 'outline' },
   confirmed: { label: 'Confirmed', icon: CheckCircle2, variant: 'default' },
   preparing: { label: 'Preparing', icon: ChefHat, variant: 'outline' },
   ready: { label: 'Ready', icon: Bell, variant: 'default' },
   completed: { label: 'Completed', icon: CheckCircle2, variant: 'secondary' },
-  cancelled: { label: 'Cancelled', icon: Clock, variant: 'destructive' },
+  cancelled: { label: 'Cancelled', icon: XCircle, variant: 'destructive' },
 };
 
 const statusFlow: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'completed'];
