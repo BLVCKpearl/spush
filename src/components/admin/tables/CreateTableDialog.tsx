@@ -173,6 +173,11 @@ export function CreateTableDialog({
                   value={bulkNumberForm.watch('venue_id')}
                   onChange={(v) => bulkNumberForm.setValue('venue_id', v)}
                 />
+                {bulkNumberForm.formState.errors.venue_id && (
+                  <p className="text-sm text-destructive">
+                    {bulkNumberForm.formState.errors.venue_id.message}
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
@@ -181,17 +186,36 @@ export function CreateTableDialog({
                 </div>
                 <div className="space-y-2">
                   <Label>Start #</Label>
-                  <Input {...bulkNumberForm.register('start')} type="number" min={1} />
+                  <Input 
+                    {...bulkNumberForm.register('start', { valueAsNumber: true })} 
+                    type="number" 
+                    min={1} 
+                  />
+                  {bulkNumberForm.formState.errors.start && (
+                    <p className="text-sm text-destructive">
+                      {bulkNumberForm.formState.errors.start.message}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Count</Label>
-                  <Input {...bulkNumberForm.register('count')} type="number" min={1} max={100} />
+                  <Input 
+                    {...bulkNumberForm.register('count', { valueAsNumber: true })} 
+                    type="number" 
+                    min={1} 
+                    max={100} 
+                  />
+                  {bulkNumberForm.formState.errors.count && (
+                    <p className="text-sm text-destructive">
+                      {bulkNumberForm.formState.errors.count.message}
+                    </p>
+                  )}
                 </div>
               </div>
               <p className="text-sm text-muted-foreground">
                 Will create: {bulkNumberForm.watch('prefix')}
-                {bulkNumberForm.watch('start')} through {bulkNumberForm.watch('prefix')}
-                {bulkNumberForm.watch('start') + bulkNumberForm.watch('count') - 1}
+                {Number(bulkNumberForm.watch('start'))} through {bulkNumberForm.watch('prefix')}
+                {Number(bulkNumberForm.watch('start')) + Number(bulkNumberForm.watch('count')) - 1}
               </p>
               <DialogFooter>
                 <Button type="submit" disabled={isLoading}>
