@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import type { Order, OrderWithItems, OrderStatus, PaymentMethod, CartItem } from '@/types/database';
+import type { Order, OrderWithItems, OrderStatus, PaymentMethod, CartItem, ItemSnapshot } from '@/types/database';
 import { useEffect } from 'react';
 
 export function useOrder(orderReference: string) {
@@ -18,7 +18,16 @@ export function useOrder(orderReference: string) {
         .maybeSingle();
       
       if (error) throw error;
-      return data as OrderWithItems | null;
+      if (!data) return null;
+      
+      // Transform the data to match our types
+      return {
+        ...data,
+        order_items: data.order_items.map((item: any) => ({
+          ...item,
+          item_snapshot: item.item_snapshot as ItemSnapshot,
+        })),
+      } as OrderWithItems;
     },
     enabled: !!orderReference,
   });
@@ -46,7 +55,15 @@ export function useOrders(status?: OrderStatus) {
       const { data, error } = await q;
       
       if (error) throw error;
-      return data as OrderWithItems[];
+      
+      // Transform the data to match our types
+      return (data || []).map((order: any) => ({
+        ...order,
+        order_items: order.order_items.map((item: any) => ({
+          ...item,
+          item_snapshot: item.item_snapshot as ItemSnapshot,
+        })),
+      })) as OrderWithItems[];
     },
   });
 
@@ -80,11 +97,15 @@ export function useCreateOrder() {
 
   return useMutation({
     mutationFn: async ({
+      venueId,
+      tableId,
       tableNumber,
       customerName,
       paymentMethod,
       items,
     }: {
+      venueId?: string;
+      tableId?: string;
       tableNumber: number;
       customerName?: string;
       paymentMethod: PaymentMethod;
@@ -95,10 +116,12 @@ export function useCreateOrder() {
         0
       );
 
-      // Create the order
+      // Create the order with venue/table info
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
+          venue_id: venueId || null,
+          table_id: tableId || null,
           table_number: tableNumber,
           customer_name: customerName || null,
           payment_method: paymentMethod,
@@ -110,12 +133,17 @@ export function useCreateOrder() {
 
       if (orderError) throw orderError;
 
-      // Create order items
+      // Create order items with snapshots
       const orderItems = items.map((item) => ({
         order_id: order.id,
         menu_item_id: item.menuItem.id,
         quantity: item.quantity,
         unit_price_kobo: item.menuItem.price_kobo,
+        item_snapshot: {
+          name: item.menuItem.name,
+          description: item.menuItem.description,
+          price_kobo: item.menuItem.price_kobo,
+        },
       }));
 
       const { error: itemsError } = await supabase
