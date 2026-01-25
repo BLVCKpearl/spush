@@ -1,1 +1,4 @@
 project_id = "bcyjsaekneejgfhddwru"
+
+[functions.expire-orders]
+verify_jwt = false

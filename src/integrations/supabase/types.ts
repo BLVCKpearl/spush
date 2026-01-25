@@ -176,6 +176,7 @@ export type Database = {
         Row: {
           created_at: string
           customer_name: string | null
+          expires_at: string | null
           id: string
           order_reference: string
           payment_confirmed: boolean
@@ -190,6 +191,7 @@ export type Database = {
         Insert: {
           created_at?: string
           customer_name?: string | null
+          expires_at?: string | null
           id?: string
           order_reference: string
           payment_confirmed?: boolean
@@ -204,6 +206,7 @@ export type Database = {
         Update: {
           created_at?: string
           customer_name?: string | null
+          expires_at?: string | null
           id?: string
           order_reference?: string
           payment_confirmed?: boolean
@@ -358,6 +361,41 @@ export type Database = {
         }
         Relationships: []
       }
+      venue_settings: {
+        Row: {
+          created_at: string
+          id: string
+          setting_key: string
+          setting_value: string
+          updated_at: string
+          venue_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          setting_key: string
+          setting_value: string
+          updated_at?: string
+          venue_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          setting_key?: string
+          setting_value?: string
+          updated_at?: string
+          venue_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_settings_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venues: {
         Row: {
           created_at: string
@@ -384,7 +422,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      expire_pending_orders: { Args: never; Returns: number }
       generate_order_reference: { Args: never; Returns: string }
+      get_order_expiry_minutes: {
+        Args: { p_venue_id: string }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -405,6 +448,7 @@ export type Database = {
         | "cancelled"
         | "pending_payment"
         | "cash_on_delivery"
+        | "expired"
       payment_method: "bank_transfer" | "cash"
     }
     CompositeTypes: {
@@ -543,6 +587,7 @@ export const Constants = {
         "cancelled",
         "pending_payment",
         "cash_on_delivery",
+        "expired",
       ],
       payment_method: ["bank_transfer", "cash"],
     },
