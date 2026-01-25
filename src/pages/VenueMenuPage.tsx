@@ -1,20 +1,25 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTableSession, getStoredSession } from '@/hooks/useTableSession';
-import { useCategories, useMenuItems } from '@/hooks/useMenu';
+import { useCategories, useVenueMenuItems, useMenuItems } from '@/hooks/useMenu';
 import { useCart } from '@/contexts/CartContext';
 import { formatNaira } from '@/lib/currency';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { ShoppingCart, Plus, Minus, AlertCircle } from 'lucide-react';
+import { ShoppingCart, AlertCircle, Loader2 } from 'lucide-react';
+import { MenuItemCard } from '@/components/menu/MenuItemCard';
+import { MenuSearch } from '@/components/menu/MenuSearch';
+import { CategoryFilter } from '@/components/menu/CategoryFilter';
 import type { MenuItem } from '@/types/database';
 
 export default function VenueMenuPage() {
   const { venueSlug } = useParams<{ venueSlug: string }>();
   const navigate = useNavigate();
   const { session } = useTableSession();
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   
   const { 
     items: cartItems, 
@@ -25,16 +30,57 @@ export default function VenueMenuPage() {
   } = useCart();
   
   const { data: categories, isLoading: categoriesLoading } = useCategories();
-  const { data: menuItems, isLoading: menuLoading } = useMenuItems();
+  
+  // Try venue-specific items first, fall back to all items
+  const { data: venueMenuItems, isLoading: venueMenuLoading } = useVenueMenuItems(session?.venueId);
+  const { data: allMenuItems, isLoading: allMenuLoading } = useMenuItems();
+  
+  // Use venue items if available, otherwise use all available items
+  const menuItems = venueMenuItems && venueMenuItems.length > 0 ? venueMenuItems : allMenuItems;
+  const menuLoading = venueMenuLoading || allMenuLoading;
 
   // Validate session matches the venue
   useEffect(() => {
     const storedSession = getStoredSession();
     if (!storedSession || storedSession.venueSlug !== venueSlug) {
-      // No valid session for this venue, redirect to home
       navigate('/', { replace: true });
     }
   }, [venueSlug, navigate]);
+
+  // Filter menu items based on search and category
+  const filteredItems = useMemo(() => {
+    if (!menuItems) return [];
+    
+    let filtered = menuItems;
+    
+    // Filter by category
+    if (selectedCategoryId) {
+      filtered = filtered.filter(item => item.category_id === selectedCategoryId);
+    }
+    
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(item => 
+        item.name.toLowerCase().includes(query) ||
+        (item.description?.toLowerCase().includes(query))
+      );
+    }
+    
+    return filtered;
+  }, [menuItems, selectedCategoryId, searchQuery]);
+
+  // Group items by category for display
+  const groupedItems = useMemo(() => {
+    return filteredItems.reduce((acc, item) => {
+      const categoryId = item.category_id;
+      if (!acc[categoryId]) {
+        acc[categoryId] = [];
+      }
+      acc[categoryId].push(item);
+      return acc;
+    }, {} as Record<string, typeof filteredItems>);
+  }, [filteredItems]);
 
   if (!session || session.venueSlug !== venueSlug) {
     return (
@@ -58,6 +104,7 @@ export default function VenueMenuPage() {
   };
 
   const handleAddItem = (menuItem: MenuItem) => {
+    if (!menuItem.is_available) return;
     addItem(menuItem);
   };
 
@@ -66,19 +113,13 @@ export default function VenueMenuPage() {
     updateQuantity(itemId, currentQty + delta);
   };
 
-  const groupedItems = menuItems?.reduce((acc, item) => {
-    const categoryId = item.category_id;
-    if (!acc[categoryId]) {
-      acc[categoryId] = [];
-    }
-    acc[categoryId].push(item);
-    return acc;
-  }, {} as Record<string, typeof menuItems>);
-
   if (categoriesLoading || menuLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Loading menu...</p>
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
+          <p className="text-muted-foreground">Loading menu...</p>
+        </div>
       </div>
     );
   }
@@ -87,7 +128,7 @@ export default function VenueMenuPage() {
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-background border-b px-4 py-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-3">
           <div>
             <h1 className="text-lg font-semibold">{session.venueName}</h1>
             <p className="text-sm text-muted-foreground">{session.tableLabel}</p>
@@ -96,54 +137,88 @@ export default function VenueMenuPage() {
             {getTotalItems()} items
           </Badge>
         </div>
+        
+        {/* Search */}
+        <MenuSearch value={searchQuery} onChange={setSearchQuery} />
+        
+        {/* Category Filter */}
+        {categories && categories.length > 0 && (
+          <div className="mt-3">
+            <CategoryFilter
+              categories={categories}
+              selectedCategoryId={selectedCategoryId}
+              onSelect={setSelectedCategoryId}
+            />
+          </div>
+        )}
       </header>
 
       {/* Menu Content */}
-      <main className="p-4">
-        {categories && categories.length > 0 ? (
-          <Tabs defaultValue={categories[0]?.id} className="w-full">
-            <TabsList className="w-full justify-start overflow-x-auto flex-nowrap mb-4">
-              {categories.map((category) => (
-                <TabsTrigger 
-                  key={category.id} 
-                  value={category.id}
-                  className="whitespace-nowrap"
-                >
-                  {category.name}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-
-            {categories.map((category) => (
-              <TabsContent key={category.id} value={category.id} className="space-y-3">
-                {groupedItems?.[category.id]?.map((item) => (
-                  <MenuItemCard
-                    key={item.id}
-                    item={item}
-                    quantity={getItemQuantity(item.id)}
-                    onAdd={() => handleAddItem(item)}
-                    onIncrement={() => handleUpdateQuantity(item.id, 1)}
-                    onDecrement={() => handleUpdateQuantity(item.id, -1)}
-                  />
-                ))}
-                {(!groupedItems?.[category.id] || groupedItems[category.id].length === 0) && (
-                  <p className="text-center text-muted-foreground py-8">
-                    No items available in this category
-                  </p>
-                )}
-              </TabsContent>
-            ))}
-          </Tabs>
-        ) : (
+      <main className="p-4 space-y-6">
+        {filteredItems.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-muted-foreground">No menu items available</p>
+            <p className="text-muted-foreground">
+              {searchQuery || selectedCategoryId 
+                ? 'No items match your search' 
+                : 'No menu items available'}
+            </p>
+            {(searchQuery || selectedCategoryId) && (
+              <Button 
+                variant="link" 
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedCategoryId(null);
+                }}
+                className="mt-2"
+              >
+                Clear filters
+              </Button>
+            )}
           </div>
+        ) : selectedCategoryId ? (
+          // Show flat list when category is selected
+          <div className="space-y-3">
+            {filteredItems.map((item) => (
+              <MenuItemCard
+                key={item.id}
+                item={item}
+                quantity={getItemQuantity(item.id)}
+                onAdd={() => handleAddItem(item)}
+                onIncrement={() => handleUpdateQuantity(item.id, 1)}
+                onDecrement={() => handleUpdateQuantity(item.id, -1)}
+              />
+            ))}
+          </div>
+        ) : (
+          // Show grouped by category when no category filter
+          categories?.map((category) => {
+            const categoryItems = groupedItems[category.id];
+            if (!categoryItems || categoryItems.length === 0) return null;
+            
+            return (
+              <section key={category.id}>
+                <h2 className="text-lg font-semibold mb-3">{category.name}</h2>
+                <div className="space-y-3">
+                  {categoryItems.map((item) => (
+                    <MenuItemCard
+                      key={item.id}
+                      item={item}
+                      quantity={getItemQuantity(item.id)}
+                      onAdd={() => handleAddItem(item)}
+                      onIncrement={() => handleUpdateQuantity(item.id, 1)}
+                      onDecrement={() => handleUpdateQuantity(item.id, -1)}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })
         )}
       </main>
 
       {/* Cart Footer */}
       {getTotalItems() > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4">
+        <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4 safe-area-pb">
           <Button 
             className="w-full h-12 text-base"
             onClick={() => navigate('/cart')}
@@ -154,53 +229,5 @@ export default function VenueMenuPage() {
         </div>
       )}
     </div>
-  );
-}
-
-interface MenuItemCardProps {
-  item: MenuItem;
-  quantity: number;
-  onAdd: () => void;
-  onIncrement: () => void;
-  onDecrement: () => void;
-}
-
-function MenuItemCard({ item, quantity, onAdd, onIncrement, onDecrement }: MenuItemCardProps) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start gap-4">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-medium">{item.name}</h3>
-            {item.description && (
-              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                {item.description}
-              </p>
-            )}
-            <p className="text-base font-semibold mt-2">
-              {formatNaira(item.price_kobo)}
-            </p>
-          </div>
-          <div className="flex-shrink-0">
-            {quantity === 0 ? (
-              <Button size="sm" onClick={onAdd}>
-                <Plus className="h-4 w-4 mr-1" />
-                Add
-              </Button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Button size="icon" variant="outline" onClick={onDecrement}>
-                  <Minus className="h-4 w-4" />
-                </Button>
-                <span className="w-8 text-center font-medium">{quantity}</span>
-                <Button size="icon" variant="outline" onClick={onIncrement}>
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

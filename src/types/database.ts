@@ -13,10 +13,12 @@ export interface Category {
 export interface MenuItem {
   id: string;
   category_id: string;
+  venue_id: string | null;
   name: string;
   description: string | null;
   price_kobo: number;
   is_available: boolean;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 }
