@@ -11,6 +11,7 @@ interface CreateUserRequest {
   email: string;
   fullName: string;
   role: "admin" | "staff";
+  password?: string;
 }
 
 interface UpdateUserRequest {
@@ -31,11 +32,18 @@ interface DeactivateUserRequest {
   userId: string;
 }
 
+interface SetPasswordRequest {
+  action: "set_password";
+  userId: string;
+  password: string;
+}
+
 type UserManagementRequest =
   | CreateUserRequest
   | UpdateUserRequest
   | ResetPasswordRequest
-  | DeactivateUserRequest;
+  | DeactivateUserRequest
+  | SetPasswordRequest;
 
 // Generate a secure random password
 function generateSecurePassword(): string {
@@ -116,7 +124,7 @@ Deno.serve(async (req) => {
     // Handle different actions
     switch (body.action) {
       case "create": {
-        const { email, fullName, role } = body;
+        const { email, fullName, role, password: customPassword } = body;
 
         // Validate input
         if (!email || !fullName || !role) {
@@ -146,13 +154,15 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Generate temporary password
-        const tempPassword = generateSecurePassword();
+        // Use custom password or generate one
+        const userPassword = customPassword && customPassword.length >= 6 
+          ? customPassword 
+          : generateSecurePassword();
 
         // Create user in auth.users
         const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
           email,
-          password: tempPassword,
+          password: userPassword,
           email_confirm: true,
           user_metadata: { full_name: fullName },
         });
@@ -194,8 +204,8 @@ Deno.serve(async (req) => {
           JSON.stringify({
             success: true,
             userId: newUser.user.id,
-            temporaryPassword: tempPassword,
-            message: "User created successfully. Share the temporary password securely.",
+            password: userPassword,
+            message: "User created successfully. Share the password securely.",
           }),
           { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -381,6 +391,48 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, message: "User deactivated successfully" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      case "set_password": {
+        const { userId, password } = body as SetPasswordRequest;
+
+        if (!userId || !password) {
+          return new Response(
+            JSON.stringify({ error: "User ID and password are required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (password.length < 6) {
+          return new Response(
+            JSON.stringify({ error: "Password must be at least 6 characters" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Update user password
+        const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+          password,
+        });
+
+        if (updateError) {
+          console.error("Error setting password:", updateError);
+          return new Response(
+            JSON.stringify({ error: "Failed to set password" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Log audit
+        await logAudit("password_modified", userId, {});
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Password updated successfully.",
+          }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }

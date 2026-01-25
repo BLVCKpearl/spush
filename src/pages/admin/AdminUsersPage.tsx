@@ -26,12 +26,14 @@ import {
 import CreateUserDialog from '@/components/admin/users/CreateUserDialog';
 import EditUserDialog from '@/components/admin/users/EditUserDialog';
 import ResetPasswordDialog from '@/components/admin/users/ResetPasswordDialog';
+import ModifyPasswordDialog from '@/components/admin/users/ModifyPasswordDialog';
 import UserActionsDropdown from '@/components/admin/users/UserActionsDropdown';
 
 export default function AdminUsersPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [modifyPasswordDialogOpen, setModifyPasswordDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
 
   const { data: users, isLoading, error } = useUsers();
@@ -46,6 +48,11 @@ export default function AdminUsersPage() {
   const handleResetPassword = (user: ManagedUser) => {
     setSelectedUser(user);
     setResetPasswordDialogOpen(true);
+  };
+
+  const handleModifyPassword = (user: ManagedUser) => {
+    setSelectedUser(user);
+    setModifyPasswordDialogOpen(true);
   };
 
   const handleToggleActive = async (user: ManagedUser) => {
@@ -180,6 +187,7 @@ export default function AdminUsersPage() {
                             user={user}
                             onEdit={() => handleEdit(user)}
                             onResetPassword={() => handleResetPassword(user)}
+                            onModifyPassword={() => handleModifyPassword(user)}
                             onToggleActive={() => handleToggleActive(user)}
                           />
                         </TableCell>
@@ -203,6 +211,11 @@ export default function AdminUsersPage() {
       <ResetPasswordDialog
         open={resetPasswordDialogOpen}
         onOpenChange={setResetPasswordDialogOpen}
+        user={selectedUser}
+      />
+      <ModifyPasswordDialog
+        open={modifyPasswordDialogOpen}
+        onOpenChange={setModifyPasswordDialogOpen}
         user={selectedUser}
       />
     </AdminLayout>
