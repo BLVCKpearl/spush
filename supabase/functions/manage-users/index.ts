@@ -71,13 +71,17 @@ Deno.serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     const token = authHeader.replace("Bearer ", "");
     
-    const { data: { user: actorUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !actorUser) {
+    // Use getClaims for proper JWT validation with signing-keys
+    const { data: claimsData, error: claimsError } = await supabaseAdmin.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
       return new Response(
         JSON.stringify({ error: "Invalid token" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    
+    const actorUserId = claimsData.claims.sub as string;
+    const actorUser = { id: actorUserId };
 
     // Check if actor is admin
     const { data: actorRoles } = await supabaseAdmin
@@ -101,9 +105,8 @@ Deno.serve(async (req) => {
       targetUserId: string | null,
       metadata: Record<string, unknown> = {}
     ) {
-      if (!actorUser) return;
       await supabaseAdmin.from("admin_audit_logs").insert({
-        actor_user_id: actorUser.id,
+        actor_user_id: actorUserId,
         action,
         target_user_id: targetUserId,
         metadata,
