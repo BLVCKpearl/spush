@@ -1,0 +1,237 @@
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Loader2 } from 'lucide-react';
+import { useVenues } from '@/hooks/useVenues';
+
+const singleSchema = z.object({
+  venue_id: z.string().min(1, 'Please select a venue'),
+  label: z.string().min(1, 'Label is required').max(50, 'Label too long'),
+});
+
+const bulkNumberSchema = z.object({
+  venue_id: z.string().min(1, 'Please select a venue'),
+  prefix: z.string().max(20, 'Prefix too long'),
+  start: z.coerce.number().int().min(1, 'Start must be at least 1'),
+  count: z.coerce.number().int().min(1, 'Count must be at least 1').max(100, 'Max 100 tables'),
+});
+
+const bulkListSchema = z.object({
+  venue_id: z.string().min(1, 'Please select a venue'),
+  labels: z.string().min(1, 'Please enter at least one label'),
+});
+
+interface CreateTableDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreateSingle: (data: { venue_id: string; label: string }) => Promise<void>;
+  onCreateBulk: (data: { venue_id: string; labels: string[] }) => Promise<void>;
+  isLoading: boolean;
+}
+
+export function CreateTableDialog({
+  open,
+  onOpenChange,
+  onCreateSingle,
+  onCreateBulk,
+  isLoading,
+}: CreateTableDialogProps) {
+  const [tab, setTab] = useState<'single' | 'bulk-number' | 'bulk-list'>('single');
+  const { data: venues, isLoading: venuesLoading } = useVenues();
+
+  const singleForm = useForm({
+    resolver: zodResolver(singleSchema),
+    defaultValues: { venue_id: '', label: '' },
+  });
+
+  const bulkNumberForm = useForm({
+    resolver: zodResolver(bulkNumberSchema),
+    defaultValues: { venue_id: '', prefix: 'Table ', start: 1, count: 10 },
+  });
+
+  const bulkListForm = useForm({
+    resolver: zodResolver(bulkListSchema),
+    defaultValues: { venue_id: '', labels: '' },
+  });
+
+  const handleSingleSubmit = async (values: z.infer<typeof singleSchema>) => {
+    await onCreateSingle({ venue_id: values.venue_id, label: values.label });
+    singleForm.reset();
+    onOpenChange(false);
+  };
+
+  const handleBulkNumberSubmit = async (data: z.infer<typeof bulkNumberSchema>) => {
+    const labels = Array.from(
+      { length: data.count },
+      (_, i) => `${data.prefix}${data.start + i}`
+    );
+    await onCreateBulk({ venue_id: data.venue_id, labels });
+    bulkNumberForm.reset();
+    onOpenChange(false);
+  };
+
+  const handleBulkListSubmit = async (data: z.infer<typeof bulkListSchema>) => {
+    const labels = data.labels
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    if (labels.length === 0) return;
+    await onCreateBulk({ venue_id: data.venue_id, labels });
+    bulkListForm.reset();
+    onOpenChange(false);
+  };
+
+  const VenueSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <Select value={value} onValueChange={onChange} disabled={venuesLoading}>
+      <SelectTrigger>
+        <SelectValue placeholder="Select venue" />
+      </SelectTrigger>
+      <SelectContent>
+        {venues?.map((venue) => (
+          <SelectItem key={venue.id} value={venue.id}>
+            {venue.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Create Tables</DialogTitle>
+        </DialogHeader>
+
+        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="single">Single</TabsTrigger>
+            <TabsTrigger value="bulk-number">By Number</TabsTrigger>
+            <TabsTrigger value="bulk-list">By List</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="single" className="space-y-4 mt-4">
+            <form onSubmit={singleForm.handleSubmit(handleSingleSubmit)} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Venue</Label>
+                <VenueSelect
+                  value={singleForm.watch('venue_id')}
+                  onChange={(v) => singleForm.setValue('venue_id', v)}
+                />
+                {singleForm.formState.errors.venue_id && (
+                  <p className="text-sm text-destructive">
+                    {singleForm.formState.errors.venue_id.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Table Label</Label>
+                <Input
+                  {...singleForm.register('label')}
+                  placeholder="e.g. Table 5, Bar 2"
+                />
+                {singleForm.formState.errors.label && (
+                  <p className="text-sm text-destructive">
+                    {singleForm.formState.errors.label.message}
+                  </p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Create Table
+                </Button>
+              </DialogFooter>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="bulk-number" className="space-y-4 mt-4">
+            <form onSubmit={bulkNumberForm.handleSubmit(handleBulkNumberSubmit)} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Venue</Label>
+                <VenueSelect
+                  value={bulkNumberForm.watch('venue_id')}
+                  onChange={(v) => bulkNumberForm.setValue('venue_id', v)}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Prefix</Label>
+                  <Input {...bulkNumberForm.register('prefix')} placeholder="Table " />
+                </div>
+                <div className="space-y-2">
+                  <Label>Start #</Label>
+                  <Input {...bulkNumberForm.register('start')} type="number" min={1} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Count</Label>
+                  <Input {...bulkNumberForm.register('count')} type="number" min={1} max={100} />
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Will create: {bulkNumberForm.watch('prefix')}
+                {bulkNumberForm.watch('start')} through {bulkNumberForm.watch('prefix')}
+                {bulkNumberForm.watch('start') + bulkNumberForm.watch('count') - 1}
+              </p>
+              <DialogFooter>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Create {bulkNumberForm.watch('count')} Tables
+                </Button>
+              </DialogFooter>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="bulk-list" className="space-y-4 mt-4">
+            <form onSubmit={bulkListForm.handleSubmit(handleBulkListSubmit)} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Venue</Label>
+                <VenueSelect
+                  value={bulkListForm.watch('venue_id')}
+                  onChange={(v) => bulkListForm.setValue('venue_id', v)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Table Labels (one per line)</Label>
+                <Textarea
+                  {...bulkListForm.register('labels')}
+                  rows={6}
+                  placeholder="Table 1
+Table 2
+Bar Area
+VIP Booth"
+                />
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Create Tables
+                </Button>
+              </DialogFooter>
+            </form>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  );
+}
