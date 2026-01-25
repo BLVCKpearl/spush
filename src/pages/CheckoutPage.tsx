@@ -21,7 +21,7 @@ export default function CheckoutPage() {
   const createOrder = useCreateOrder();
   
   const [customerName, setCustomerName] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('bank_transfer');
 
   // Use session from context or hook
   const currentSession = tableSession || session;
@@ -128,13 +128,18 @@ export default function CheckoutPage() {
             >
               <label 
                 htmlFor="bank_transfer" 
-                className="flex items-center space-x-3 border rounded-lg p-4 cursor-pointer hover:bg-accent/50 transition-colors"
+                className="flex items-center space-x-3 border-2 border-primary rounded-lg p-4 cursor-pointer hover:bg-accent/50 transition-colors relative"
               >
                 <RadioGroupItem value="bank_transfer" id="bank_transfer" />
                 <div className="flex items-center gap-3 flex-1">
-                  <CreditCard className="h-5 w-5 text-muted-foreground" />
+                  <CreditCard className="h-5 w-5 text-primary" />
                   <div>
-                    <p className="font-medium">Bank Transfer</p>
+                    <p className="font-medium flex items-center gap-2">
+                      Bank Transfer
+                      <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
+                        Recommended
+                      </span>
+                    </p>
                     <p className="text-sm text-muted-foreground">
                       Pay via bank transfer
                     </p>
