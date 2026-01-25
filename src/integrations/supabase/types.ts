@@ -71,7 +71,9 @@ export type Database = {
           is_available: boolean
           name: string
           price_kobo: number
+          sort_order: number
           updated_at: string
+          venue_id: string | null
         }
         Insert: {
           category_id: string
@@ -81,7 +83,9 @@ export type Database = {
           is_available?: boolean
           name: string
           price_kobo: number
+          sort_order?: number
           updated_at?: string
+          venue_id?: string | null
         }
         Update: {
           category_id?: string
@@ -91,7 +95,9 @@ export type Database = {
           is_available?: boolean
           name?: string
           price_kobo?: number
+          sort_order?: number
           updated_at?: string
+          venue_id?: string | null
         }
         Relationships: [
           {
@@ -99,6 +105,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_items_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
             referencedColumns: ["id"]
           },
         ]

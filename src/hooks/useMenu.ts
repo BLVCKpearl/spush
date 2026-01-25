@@ -2,9 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Category, MenuItem, MenuItemWithCategory } from '@/types/database';
 
-export function useCategories() {
+export function useCategories(venueId?: string) {
   return useQuery({
-    queryKey: ['categories'],
+    queryKey: ['categories', venueId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')
@@ -32,6 +32,24 @@ export function useMenuItems(categoryId?: string) {
       }
       
       const { data, error } = await query;
+      
+      if (error) throw error;
+      return data as MenuItemWithCategory[];
+    },
+  });
+}
+
+export function useVenueMenuItems(venueId: string | undefined) {
+  return useQuery({
+    queryKey: ['venue-menu-items', venueId],
+    enabled: !!venueId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('menu_items')
+        .select('*, categories(*)')
+        .eq('venue_id', venueId!)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
       
       if (error) throw error;
       return data as MenuItemWithCategory[];
