@@ -18,6 +18,21 @@ export default function AdminLoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const getErrorMessage = (err: unknown) => {
+    if (!err) return null;
+    if (err instanceof Error) return err.message;
+    if (typeof err === 'string') return err;
+    if (typeof err === 'object' && 'message' in (err as any)) {
+      const msg = (err as any).message;
+      if (typeof msg === 'string') return msg;
+    }
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return 'An unknown error occurred.';
+    }
+  };
+
   // Redirect if already logged in with a valid role
   useEffect(() => {
     if (!loading && user && (isAdmin || isStaff)) {
@@ -40,7 +55,7 @@ export default function AdminLoginPage() {
       const { error: signInError } = await signIn(email, password);
       
       if (signInError) {
-        setError(signInError.message);
+        setError(getErrorMessage(signInError) ?? 'Login failed.');
         return;
       }
 
