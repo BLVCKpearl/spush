@@ -14,6 +14,7 @@ import VenueTableResolver from "./pages/VenueTableResolver";
 import VenueMenuPage from "./pages/VenueMenuPage";
 import AdminLoginPage from "./pages/admin/AdminLoginPage";
 import AdminOrdersPage from "./pages/admin/AdminOrdersPage";
+import AdminAnalyticsPage from "./pages/admin/AdminAnalyticsPage";
 import AdminMenuPage from "./pages/admin/AdminMenuPage";
 import AdminBankDetailsPage from "./pages/admin/AdminBankDetailsPage";
 import NotFound from "./pages/NotFound";
@@ -40,6 +41,7 @@ const App = () => (
             <Route path="/track/:reference" element={<TrackOrderPage />} />
             <Route path="/admin/login" element={<AdminLoginPage />} />
             <Route path="/admin/orders" element={<AdminOrdersPage />} />
+            <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
             <Route path="/admin/menu" element={<AdminMenuPage />} />
             <Route path="/admin/bank-details" element={<AdminBankDetailsPage />} />
             <Route path="*" element={<NotFound />} />
