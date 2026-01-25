@@ -197,27 +197,26 @@ export default function AdminRolesPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Select
-                        onValueChange={(value) => addRole(user.id, value as AppRole)}
-                        disabled={actionLoading?.startsWith(`add-${user.id}`)}
-                      >
-                        <SelectTrigger className="w-32">
-                          <SelectValue placeholder="Add role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {!user.roles.includes('admin') && (
-                            <SelectItem value="admin">Admin</SelectItem>
-                          )}
-                          {!user.roles.includes('staff') && (
-                            <SelectItem value="staff">Staff</SelectItem>
-                          )}
-                          {user.roles.includes('admin') && user.roles.includes('staff') && (
-                            <SelectItem value="" disabled>
-                              All roles assigned
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
+                      {user.roles.includes('admin') && user.roles.includes('staff') ? (
+                        <span className="text-sm text-muted-foreground">All roles assigned</span>
+                      ) : (
+                        <Select
+                          onValueChange={(value) => addRole(user.id, value as AppRole)}
+                          disabled={actionLoading?.startsWith(`add-${user.id}`)}
+                        >
+                          <SelectTrigger className="w-32">
+                            <SelectValue placeholder="Add role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {!user.roles.includes('admin') && (
+                              <SelectItem value="admin">Admin</SelectItem>
+                            )}
+                            {!user.roles.includes('staff') && (
+                              <SelectItem value="staff">Staff</SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
