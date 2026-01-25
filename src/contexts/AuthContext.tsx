@@ -38,7 +38,7 @@ async function fetchMustChangePassword(userId: string): Promise<boolean> {
     .from("profiles")
     .select("must_change_password")
     .eq("user_id", userId)
-    .single();
+    .maybeSingle();
 
   return data?.must_change_password ?? false;
 }
@@ -51,47 +51,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [mustChangePassword, setMustChangePassword] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, nextSession) => {
+        if (!isMounted) return;
+        
         setSession(nextSession);
         setUser(nextSession?.user ?? null);
 
         if (nextSession?.user) {
-          const [nextRole, mustChange] = await Promise.all([
-            fetchUserRole(nextSession.user.id),
-            fetchMustChangePassword(nextSession.user.id),
-          ]);
-          setRole(nextRole);
-          setMustChangePassword(mustChange);
+          try {
+            const [nextRole, mustChange] = await Promise.all([
+              fetchUserRole(nextSession.user.id),
+              fetchMustChangePassword(nextSession.user.id),
+            ]);
+            if (isMounted) {
+              setRole(nextRole);
+              setMustChangePassword(mustChange);
+            }
+          } catch (error) {
+            console.error("Error fetching user data:", error);
+            if (isMounted) {
+              setRole(null);
+              setMustChangePassword(false);
+            }
+          }
         } else {
           setRole(null);
           setMustChangePassword(false);
         }
 
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     );
 
     supabase.auth.getSession().then(async ({ data: { session: existing } }) => {
+      if (!isMounted) return;
+      
       setSession(existing);
       setUser(existing?.user ?? null);
 
       if (existing?.user) {
-        const [existingRole, mustChange] = await Promise.all([
-          fetchUserRole(existing.user.id),
-          fetchMustChangePassword(existing.user.id),
-        ]);
-        setRole(existingRole);
-        setMustChangePassword(mustChange);
+        try {
+          const [existingRole, mustChange] = await Promise.all([
+            fetchUserRole(existing.user.id),
+            fetchMustChangePassword(existing.user.id),
+          ]);
+          if (isMounted) {
+            setRole(existingRole);
+            setMustChangePassword(mustChange);
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+          if (isMounted) {
+            setRole(null);
+            setMustChangePassword(false);
+          }
+        }
       } else {
         setRole(null);
         setMustChangePassword(false);
       }
 
-      setLoading(false);
+      if (isMounted) setLoading(false);
+    }).catch((error) => {
+      console.error("Error getting session:", error);
+      if (isMounted) setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn: AuthContextValue["signIn"] = async (email, password) => {
