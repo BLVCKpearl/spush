@@ -213,6 +213,41 @@ export type Database = {
           },
         ]
       }
+      tables: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          label: string
+          qr_token: string
+          venue_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          label: string
+          qr_token: string
+          venue_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          label?: string
+          qr_token?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tables_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -231,6 +266,27 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      venues: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          venue_slug: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          venue_slug: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          venue_slug?: string
         }
         Relationships: []
       }
