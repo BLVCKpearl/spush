@@ -18,7 +18,8 @@ import {
   Image as ImageIcon,
   Banknote,
   CreditCard,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { OrderStatus } from '@/types/database';
@@ -32,6 +33,7 @@ const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType
   ready: { label: 'Ready', icon: Bell, color: 'bg-green-500' },
   completed: { label: 'Completed', icon: CheckCircle2, color: 'bg-gray-500' },
   cancelled: { label: 'Cancelled', icon: AlertCircle, color: 'bg-red-500' },
+  expired: { label: 'Expired', icon: AlertTriangle, color: 'bg-red-500' },
 };
 
 export default function OrderConfirmationPage() {

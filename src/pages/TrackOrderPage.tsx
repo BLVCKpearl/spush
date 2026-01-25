@@ -22,7 +22,8 @@ import {
   Send,
   XCircle,
   Banknote,
-  UtensilsCrossed
+  UtensilsCrossed,
+  AlertTriangle
 } from 'lucide-react';
 import type { OrderStatus } from '@/types/database';
 
@@ -89,6 +90,13 @@ const statusConfig: Record<OrderStatus, {
     color: 'text-destructive',
     bgColor: 'bg-destructive/10'
   },
+  expired: { 
+    label: 'Order Expired', 
+    description: 'This order has expired due to payment timeout. Please place a new order.',
+    icon: AlertTriangle, 
+    color: 'text-destructive',
+    bgColor: 'bg-destructive/10'
+  },
 };
 
 export default function TrackOrderPage() {
@@ -136,7 +144,8 @@ export default function TrackOrderPage() {
 
   const isBankTransfer = order?.payment_method === 'bank_transfer';
   const hasClaim = paymentClaims && paymentClaims.length > 0;
-  const showClaimButton = isBankTransfer && !order?.payment_confirmed && !hasClaim;
+  const isExpired = order?.status === 'expired';
+  const showClaimButton = isBankTransfer && !order?.payment_confirmed && !hasClaim && !isExpired;
   const showSearch = !reference;
 
   return (
@@ -227,8 +236,30 @@ export default function TrackOrderPage() {
               })()}
             </Card>
 
+            {/* Expired Order - Reorder Prompt */}
+            {isExpired && (
+              <Card className="border-destructive">
+                <CardContent className="p-6 text-center space-y-4">
+                  <AlertTriangle className="h-12 w-12 text-destructive mx-auto" />
+                  <div>
+                    <h3 className="font-semibold text-lg">Order Expired</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      This order has expired because payment was not received in time. 
+                      Please place a new order to continue.
+                    </p>
+                  </div>
+                  <Button 
+                    onClick={() => navigate('/')}
+                    className="w-full"
+                  >
+                    Place New Order
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Payment Claim Section for Bank Transfer */}
-            {isBankTransfer && !order.payment_confirmed && (
+            {isBankTransfer && !order.payment_confirmed && !isExpired && (
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Payment Action Required</CardTitle>
