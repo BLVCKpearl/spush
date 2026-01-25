@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,12 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
   const { user, role, isAdmin, isStaff, loading, signOut } = useAuth();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    if (!loading && (!user || (!isAdmin && !isStaff))) {
+      navigate('/admin/login');
+    }
+  }, [loading, user, isAdmin, isStaff, navigate]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -50,12 +56,15 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
   }
 
   if (!user || (!isAdmin && !isStaff)) {
-    navigate('/admin/login');
     return null;
   }
 
   const handleSignOut = async () => {
-    await signOut();
+    try {
+      await signOut();
+    } catch (e) {
+      // Ignore errors - we'll navigate anyway
+    }
     toast.success('Signed out successfully');
     navigate('/admin/login');
   };

@@ -81,8 +81,19 @@ export function useAuth() {
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    return { error };
+    // Clear local state first
+    setUser(null);
+    setSession(null);
+    setRole(null);
+    
+    // Then attempt server-side logout (ignore errors for stale sessions)
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      // Ignore - session may already be invalid
+    }
+    
+    return { error: null };
   };
 
   // Computed properties for backward compatibility and convenience
