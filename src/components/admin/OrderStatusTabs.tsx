@@ -9,7 +9,6 @@ interface OrderStatusTabsProps {
   isLoading: boolean;
   activeTab: string;
   onTabChange: (tab: string) => void;
-  onConfirmPayment: (orderId: string) => void;
   onStatusUpdate: (orderId: string, status: string) => void;
   isUpdating: boolean;
 }
@@ -58,7 +57,6 @@ export default function OrderStatusTabs({
   isLoading,
   activeTab,
   onTabChange,
-  onConfirmPayment,
   onStatusUpdate,
   isUpdating,
 }: OrderStatusTabsProps) {
@@ -101,7 +99,6 @@ export default function OrderStatusTabs({
           ) : (
             <OrderGrid
               orders={getFilteredOrders(tab.filter)}
-              onConfirmPayment={onConfirmPayment}
               onStatusUpdate={onStatusUpdate}
               isUpdating={isUpdating}
               emptyMessage={`No ${tab.label.toLowerCase()}`}
@@ -115,13 +112,12 @@ export default function OrderStatusTabs({
 
 interface OrderGridProps {
   orders: OrderWithItems[];
-  onConfirmPayment: (orderId: string) => void;
   onStatusUpdate: (orderId: string, status: string) => void;
   isUpdating: boolean;
   emptyMessage: string;
 }
 
-function OrderGrid({ orders, onConfirmPayment, onStatusUpdate, isUpdating, emptyMessage }: OrderGridProps) {
+function OrderGrid({ orders, onStatusUpdate, isUpdating, emptyMessage }: OrderGridProps) {
   if (orders.length === 0) {
     return (
       <Card>
@@ -138,7 +134,6 @@ function OrderGrid({ orders, onConfirmPayment, onStatusUpdate, isUpdating, empty
         <OrderQueueCard
           key={order.id}
           order={order}
-          onConfirmPayment={onConfirmPayment}
           onStatusUpdate={onStatusUpdate}
           isUpdating={isUpdating}
         />

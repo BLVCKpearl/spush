@@ -276,6 +276,44 @@ export type Database = {
           },
         ]
       }
+      payment_confirmations: {
+        Row: {
+          confirmed_at: string
+          confirmed_by: string
+          created_at: string
+          id: string
+          method: string
+          notes: string | null
+          order_id: string
+        }
+        Insert: {
+          confirmed_at?: string
+          confirmed_by: string
+          created_at?: string
+          id?: string
+          method?: string
+          notes?: string | null
+          order_id: string
+        }
+        Update: {
+          confirmed_at?: string
+          confirmed_by?: string
+          created_at?: string
+          id?: string
+          method?: string
+          notes?: string | null
+          order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_confirmations_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_proofs: {
         Row: {
           id: string
