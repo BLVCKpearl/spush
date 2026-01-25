@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useOrder } from '@/hooks/useOrders';
 import { usePaymentClaims } from '@/hooks/usePaymentClaims';
 import { supabase } from '@/integrations/supabase/client';
+import SecureProofImage from '@/components/admin/SecureProofImage';
 import { formatNaira } from '@/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -273,8 +274,9 @@ export default function TrackOrderPage() {
                   {paymentClaims[0]?.proof_url && (
                     <div className="mt-4 pt-3 border-t">
                       <p className="text-xs text-muted-foreground mb-2">Your uploaded proof:</p>
-                      <img
-                        src={paymentClaims[0].proof_url}
+                      <SecureProofImage
+                        proofUrl={paymentClaims[0].proof_url}
+                        orderId={order?.id}
                         alt="Payment proof"
                         className="w-full max-w-xs h-auto rounded-md border"
                       />
