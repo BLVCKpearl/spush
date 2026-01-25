@@ -289,6 +289,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "orders_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "tables_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "orders_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
@@ -546,7 +553,35 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      tables_public: {
+        Row: {
+          active: boolean | null
+          id: string | null
+          label: string | null
+          venue_id: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          id?: string | null
+          label?: string | null
+          venue_id?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          id?: string | null
+          label?: string | null
+          venue_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tables_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       check_order_rate_limit: { Args: { p_table_id: string }; Returns: boolean }
@@ -574,6 +609,15 @@ export type Database = {
       record_order_rate_limit: {
         Args: { p_table_id: string }
         Returns: undefined
+      }
+      resolve_qr_token: {
+        Args: { p_qr_token: string }
+        Returns: {
+          active: boolean
+          id: string
+          label: string
+          venue_id: string
+        }[]
       }
     }
     Enums: {

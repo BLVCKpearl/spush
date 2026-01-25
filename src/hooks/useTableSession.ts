@@ -64,21 +64,26 @@ export function useTableSession() {
         return null;
       }
 
-      // Then, find the table by qr_token and venue_id
-      const { data: table, error: tableError } = await supabase
-        .from('tables')
-        .select('id, label, active, venue_id')
-        .eq('qr_token', qrToken)
-        .eq('venue_id', venue.id)
-        .maybeSingle();
+      // Use secure RPC function to resolve QR token (doesn't expose other tokens)
+      const { data: tableData, error: tableError } = await supabase
+        .rpc('resolve_qr_token', { p_qr_token: qrToken });
 
       if (tableError) {
         setError('Failed to load table information');
         return null;
       }
 
+      // RPC returns an array, get first result
+      const table = tableData?.[0];
+
       if (!table) {
         setError('Invalid QR code. Table not found.');
+        return null;
+      }
+
+      // Verify the table belongs to this venue
+      if (table.venue_id !== venue.id) {
+        setError('Invalid QR code for this venue.');
         return null;
       }
 

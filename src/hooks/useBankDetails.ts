@@ -2,23 +2,23 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { BankDetails } from '@/types/database';
 
+/**
+ * Hook for guests to fetch bank details via edge function (bypasses RLS)
+ * Use this on public-facing pages like order confirmation
+ */
 export function useBankDetails(venueId?: string | null) {
   return useQuery({
     queryKey: ['bank-details', venueId],
     queryFn: async () => {
-      let query = supabase
-        .from('bank_details')
-        .select('*')
-        .eq('is_active', true);
+      if (!venueId) return null;
       
-      if (venueId) {
-        query = query.eq('venue_id', venueId);
-      }
-      
-      const { data, error } = await query.maybeSingle();
+      // Use edge function to fetch bank details (guests can't read bank_details table directly)
+      const { data, error } = await supabase.functions.invoke('get-bank-details', {
+        body: { venueId },
+      });
       
       if (error) throw error;
-      return data as BankDetails | null;
+      return data?.bankDetails as BankDetails | null;
     },
     enabled: !!venueId,
   });
