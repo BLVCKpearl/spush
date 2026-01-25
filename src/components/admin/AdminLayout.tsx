@@ -41,16 +41,14 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
   const auth = useAuth();
   const navigate = useNavigate();
 
-  const { user, isAdmin, isStaff, loading, signOut, mustChangePassword } = auth;
+  const { user, isAdmin, isStaff, loading, signOut } = auth;
   const isAuthorized = !!user && (isAdmin || isStaff);
 
   useEffect(() => {
     if (!loading && !isAuthorized) {
       navigate('/admin/login');
-    } else if (!loading && isAuthorized && mustChangePassword) {
-      navigate('/admin/change-password');
     }
-  }, [loading, isAuthorized, mustChangePassword, navigate]);
+  }, [loading, isAuthorized, navigate]);
 
   if (loading) {
     return (

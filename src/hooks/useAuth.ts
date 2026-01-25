@@ -11,7 +11,7 @@ export function useAuth() {
 }
 
 export function useRequireAuth(requiredRole?: 'admin' | 'staff' | 'any') {
-  const { user, role, isAdmin, isStaff, loading, mustChangePassword } = useAuth();
+  const { user, role, isAdmin, isStaff, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -31,14 +31,8 @@ export function useRequireAuth(requiredRole?: 'admin' | 'staff' | 'any') {
 
     if (!hasAccess) {
       navigate('/admin/login');
-      return;
     }
+  }, [user, role, isAdmin, isStaff, loading, navigate, requiredRole]);
 
-    // Redirect to password change page if required
-    if (mustChangePassword) {
-      navigate('/admin/change-password');
-    }
-  }, [user, role, isAdmin, isStaff, loading, navigate, requiredRole, mustChangePassword]);
-
-  return { user, role, isAdmin, isStaff, loading, mustChangePassword };
+  return { user, role, isAdmin, isStaff, loading };
 }

@@ -464,7 +464,6 @@ export type Database = {
           email: string | null
           id: string
           is_active: boolean
-          must_change_password: boolean
           updated_at: string
           user_id: string
         }
@@ -474,7 +473,6 @@ export type Database = {
           email?: string | null
           id?: string
           is_active?: boolean
-          must_change_password?: boolean
           updated_at?: string
           user_id: string
         }
@@ -484,7 +482,6 @@ export type Database = {
           email?: string | null
           id?: string
           is_active?: boolean
-          must_change_password?: boolean
           updated_at?: string
           user_id?: string
         }

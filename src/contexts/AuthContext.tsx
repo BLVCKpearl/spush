@@ -12,11 +12,9 @@ export type AuthContextValue = {
   isStaff: boolean;
   isAuthenticated: boolean;
   loading: boolean;
-  mustChangePassword: boolean;
   signIn: (email: string, password: string) => Promise<{ error: unknown | null }>;
   signUp: (email: string, password: string) => Promise<{ error: unknown | null }>;
   signOut: () => Promise<{ error: unknown | null }>;
-  clearMustChangePassword: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -33,97 +31,44 @@ async function fetchUserRole(userId: string): Promise<UserRole> {
   return null;
 }
 
-async function fetchMustChangePassword(userId: string): Promise<boolean> {
-  const { data } = await supabase
-    .from("profiles")
-    .select("must_change_password")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  return data?.must_change_password ?? false;
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
-  const [mustChangePassword, setMustChangePassword] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
-    
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, nextSession) => {
-        if (!isMounted) return;
-        
         setSession(nextSession);
         setUser(nextSession?.user ?? null);
 
         if (nextSession?.user) {
-          try {
-            const [nextRole, mustChange] = await Promise.all([
-              fetchUserRole(nextSession.user.id),
-              fetchMustChangePassword(nextSession.user.id),
-            ]);
-            if (isMounted) {
-              setRole(nextRole);
-              setMustChangePassword(mustChange);
-            }
-          } catch (error) {
-            console.error("Error fetching user data:", error);
-            if (isMounted) {
-              setRole(null);
-              setMustChangePassword(false);
-            }
-          }
+          const nextRole = await fetchUserRole(nextSession.user.id);
+          setRole(nextRole);
         } else {
           setRole(null);
-          setMustChangePassword(false);
         }
 
-        if (isMounted) setLoading(false);
+        setLoading(false);
       }
     );
 
     supabase.auth.getSession().then(async ({ data: { session: existing } }) => {
-      if (!isMounted) return;
-      
       setSession(existing);
       setUser(existing?.user ?? null);
 
       if (existing?.user) {
-        try {
-          const [existingRole, mustChange] = await Promise.all([
-            fetchUserRole(existing.user.id),
-            fetchMustChangePassword(existing.user.id),
-          ]);
-          if (isMounted) {
-            setRole(existingRole);
-            setMustChangePassword(mustChange);
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          if (isMounted) {
-            setRole(null);
-            setMustChangePassword(false);
-          }
-        }
+        const existingRole = await fetchUserRole(existing.user.id);
+        setRole(existingRole);
       } else {
         setRole(null);
-        setMustChangePassword(false);
       }
 
-      if (isMounted) setLoading(false);
-    }).catch((error) => {
-      console.error("Error getting session:", error);
-      if (isMounted) setLoading(false);
+      setLoading(false);
     });
 
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const signIn: AuthContextValue["signIn"] = async (email, password) => {
@@ -145,7 +90,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setSession(null);
     setRole(null);
-    setMustChangePassword(false);
 
     try {
       // If the session is already gone server-side, this may return 403 session_not_found.
@@ -156,10 +100,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     return { error: null };
-  };
-
-  const clearMustChangePassword = () => {
-    setMustChangePassword(false);
   };
 
   const value = useMemo<AuthContextValue>(() => {
@@ -175,13 +115,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isStaff,
       isAuthenticated,
       loading,
-      mustChangePassword,
       signIn,
       signUp,
       signOut,
-      clearMustChangePassword,
     };
-  }, [user, session, role, loading, mustChangePassword]);
+  }, [user, session, role, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
