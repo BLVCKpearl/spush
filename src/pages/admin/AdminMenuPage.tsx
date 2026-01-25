@@ -4,14 +4,14 @@ import { useRequireAuth } from '@/hooks/useAuth';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { useCategories, useAllMenuItems } from '@/hooks/useMenu';
 import { supabase } from '@/integrations/supabase/client';
-import { formatNaira, nairaToKobo, koboToNaira } from '@/lib/currency';
+import { nairaToKobo, koboToNaira } from '@/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -27,18 +27,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Trash2, Loader2, Eye, Settings } from 'lucide-react';
 import { toast } from 'sonner';
+import MenuItemRow from '@/components/admin/MenuItemRow';
+import MenuPreview from '@/components/admin/MenuPreview';
 import type { Category, MenuItem } from '@/types/database';
 
 export default function AdminMenuPage() {
-  // Admin-only page
-  const { loading: authLoading } = useRequireAuth('admin');
+  useRequireAuth('admin');
   
   const queryClient = useQueryClient();
   const { data: categories, isLoading: categoriesLoading } = useCategories();
   const { data: menuItems, isLoading: menuLoading } = useAllMenuItems();
 
+  const [activeTab, setActiveTab] = useState('manage');
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -100,12 +103,19 @@ export default function AdminMenuPage() {
       description: string;
       price_kobo: number;
     }) => {
-      const { error } = await supabase.from('menu_items').insert(data);
+      const categoryItems = menuItems?.filter(i => i.category_id === data.category_id) || [];
+      const maxOrder = categoryItems.reduce((max, i) => Math.max(max, i.sort_order), 0);
+      
+      const { error } = await supabase.from('menu_items').insert({
+        ...data,
+        sort_order: maxOrder + 1,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-menu-items'] });
       queryClient.invalidateQueries({ queryKey: ['menu-items'] });
+      queryClient.invalidateQueries({ queryKey: ['venue-menu-items'] });
       toast.success('Menu item created');
       setItemDialogOpen(false);
     },
@@ -123,6 +133,7 @@ export default function AdminMenuPage() {
       description?: string;
       price_kobo?: number;
       is_available?: boolean;
+      sort_order?: number;
     }) => {
       const { error } = await supabase.from('menu_items').update(data).eq('id', id);
       if (error) throw error;
@@ -130,7 +141,7 @@ export default function AdminMenuPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-menu-items'] });
       queryClient.invalidateQueries({ queryKey: ['menu-items'] });
-      toast.success('Menu item updated');
+      queryClient.invalidateQueries({ queryKey: ['venue-menu-items'] });
       setItemDialogOpen(false);
       setEditingItem(null);
     },
@@ -145,6 +156,7 @@ export default function AdminMenuPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-menu-items'] });
       queryClient.invalidateQueries({ queryKey: ['menu-items'] });
+      queryClient.invalidateQueries({ queryKey: ['venue-menu-items'] });
       toast.success('Menu item deleted');
     },
     onError: () => toast.error('Failed to delete menu item'),
@@ -155,6 +167,25 @@ export default function AdminMenuPage() {
       id: item.id,
       is_available: !item.is_available,
     });
+    toast.success(item.is_available ? 'Item hidden from menu' : 'Item now available');
+  };
+
+  const moveItem = async (item: MenuItem, direction: 'up' | 'down') => {
+    const categoryItems = menuItems
+      ?.filter(i => i.category_id === item.category_id)
+      .sort((a, b) => a.sort_order - b.sort_order) || [];
+    
+    const currentIndex = categoryItems.findIndex(i => i.id === item.id);
+    const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    
+    if (swapIndex < 0 || swapIndex >= categoryItems.length) return;
+    
+    const swapItem = categoryItems[swapIndex];
+    
+    await Promise.all([
+      updateMenuItem.mutateAsync({ id: item.id, sort_order: swapItem.sort_order }),
+      updateMenuItem.mutateAsync({ id: swapItem.id, sort_order: item.sort_order }),
+    ]);
   };
 
   if (categoriesLoading || menuLoading) {
@@ -167,175 +198,190 @@ export default function AdminMenuPage() {
     );
   }
 
-  const groupedItems = menuItems?.reduce((acc, item) => {
-    if (!acc[item.category_id]) acc[item.category_id] = [];
-    acc[item.category_id].push(item);
-    return acc;
-  }, {} as Record<string, MenuItem[]>);
+  const groupedItems = categories
+    ?.sort((a, b) => a.display_order - b.display_order)
+    .map(category => ({
+      category,
+      items: (menuItems || [])
+        .filter(item => item.category_id === category.id)
+        .sort((a, b) => a.sort_order - b.sort_order),
+    })) || [];
 
   return (
     <AdminLayout title="Menu Management">
-      <div className="space-y-6">
-        {/* Categories Section */}
-        <section>
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-semibold">Categories</h3>
-            <Dialog open={categoryDialogOpen} onOpenChange={(open) => {
-              setCategoryDialogOpen(open);
-              if (!open) setEditingCategory(null);
-            }}>
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Category
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <CategoryForm
-                  category={editingCategory}
-                  onSubmit={(name) => {
-                    if (editingCategory) {
-                      updateCategory.mutate({ id: editingCategory.id, name });
-                    } else {
-                      createCategory.mutate(name);
-                    }
-                  }}
-                  isLoading={createCategory.isPending || updateCategory.isPending}
-                />
-              </DialogContent>
-            </Dialog>
-          </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="manage" className="gap-1.5">
+            <Settings className="h-4 w-4" />
+            Manage
+          </TabsTrigger>
+          <TabsTrigger value="preview" className="gap-1.5">
+            <Eye className="h-4 w-4" />
+            Guest Preview
+          </TabsTrigger>
+        </TabsList>
 
-          <div className="flex flex-wrap gap-2">
-            {categories?.map((category) => (
-              <Badge
-                key={category.id}
-                variant="secondary"
-                className="text-sm py-1.5 px-3 cursor-pointer"
-                onClick={() => {
-                  setEditingCategory(category);
-                  setCategoryDialogOpen(true);
-                }}
-              >
-                {category.name}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-4 w-4 ml-2 hover:bg-destructive hover:text-destructive-foreground"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm('Delete this category? All items in it will be deleted too.')) {
-                      deleteCategory.mutate(category.id);
-                    }
+        <TabsContent value="manage" className="space-y-6">
+          {/* Categories Section */}
+          <section>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold">Categories</h3>
+              <Dialog open={categoryDialogOpen} onOpenChange={(open) => {
+                setCategoryDialogOpen(open);
+                if (!open) setEditingCategory(null);
+              }}>
+                <DialogTrigger asChild>
+                  <Button size="sm">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Category
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <CategoryForm
+                    category={editingCategory}
+                    onSubmit={(name) => {
+                      if (editingCategory) {
+                        updateCategory.mutate({ id: editingCategory.id, name });
+                      } else {
+                        createCategory.mutate(name);
+                      }
+                    }}
+                    isLoading={createCategory.isPending || updateCategory.isPending}
+                  />
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {categories?.map((category) => (
+                <Badge
+                  key={category.id}
+                  variant="secondary"
+                  className="text-sm py-1.5 px-3 cursor-pointer"
+                  onClick={() => {
+                    setEditingCategory(category);
+                    setCategoryDialogOpen(true);
                   }}
                 >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </Badge>
-            ))}
-            {!categories?.length && (
-              <p className="text-sm text-muted-foreground">No categories yet</p>
-            )}
-          </div>
-        </section>
-
-        {/* Menu Items Section */}
-        <section>
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-semibold">Menu Items</h3>
-            <Dialog open={itemDialogOpen} onOpenChange={(open) => {
-              setItemDialogOpen(open);
-              if (!open) setEditingItem(null);
-            }}>
-              <DialogTrigger asChild>
-                <Button size="sm" disabled={!categories?.length}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Item
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <MenuItemForm
-                  item={editingItem}
-                  categories={categories || []}
-                  onSubmit={(data) => {
-                    if (editingItem) {
-                      updateMenuItem.mutate({ id: editingItem.id, ...data });
-                    } else {
-                      createMenuItem.mutate(data as any);
-                    }
-                  }}
-                  isLoading={createMenuItem.isPending || updateMenuItem.isPending}
-                />
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          {categories?.map((category) => (
-            <div key={category.id} className="mb-6">
-              <h4 className="text-sm font-medium text-muted-foreground mb-3">
-                {category.name}
-              </h4>
-              <div className="space-y-2">
-                {groupedItems?.[category.id]?.map((item) => (
-                  <Card key={item.id}>
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h5 className="font-medium">{item.name}</h5>
-                            {!item.is_available && (
-                              <Badge variant="secondary">Unavailable</Badge>
-                            )}
-                          </div>
-                          {item.description && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {item.description}
-                            </p>
-                          )}
-                          <p className="font-semibold mt-2">
-                            {formatNaira(item.price_kobo)}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={item.is_available}
-                            onCheckedChange={() => toggleAvailability(item)}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setEditingItem(item);
-                              setItemDialogOpen(true);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              if (confirm('Delete this item?')) {
-                                deleteMenuItem.mutate(item.id);
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )) || (
-                  <p className="text-sm text-muted-foreground py-4">
-                    No items in this category
-                  </p>
-                )}
-              </div>
+                  {category.name}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 ml-2 hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm('Delete this category? All items in it will be deleted too.')) {
+                        deleteCategory.mutate(category.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              ))}
+              {!categories?.length && (
+                <p className="text-sm text-muted-foreground">No categories yet</p>
+              )}
             </div>
-          ))}
-        </section>
-      </div>
+          </section>
+
+          {/* Menu Items Section */}
+          <section>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold">Menu Items</h3>
+              <Dialog open={itemDialogOpen} onOpenChange={(open) => {
+                setItemDialogOpen(open);
+                if (!open) setEditingItem(null);
+              }}>
+                <DialogTrigger asChild>
+                  <Button size="sm" disabled={!categories?.length}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Item
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <MenuItemForm
+                    item={editingItem}
+                    categories={categories || []}
+                    onSubmit={(data) => {
+                      if (editingItem) {
+                        updateMenuItem.mutate({ id: editingItem.id, ...data });
+                        toast.success('Menu item updated');
+                      } else {
+                        createMenuItem.mutate(data as any);
+                      }
+                    }}
+                    isLoading={createMenuItem.isPending || updateMenuItem.isPending}
+                  />
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-4">
+              Use arrows to reorder items. Toggle availability to hide items from guests. Changes only affect future orders.
+            </p>
+
+            {groupedItems.map(({ category, items }) => (
+              <div key={category.id} className="mb-6">
+                <h4 className="text-sm font-medium text-muted-foreground mb-3">
+                  {category.name} ({items.length})
+                </h4>
+                <div className="space-y-2">
+                  {items.length > 0 ? (
+                    items.map((item, index) => (
+                      <MenuItemRow
+                        key={item.id}
+                        item={item}
+                        isFirst={index === 0}
+                        isLast={index === items.length - 1}
+                        onEdit={() => {
+                          setEditingItem(item);
+                          setItemDialogOpen(true);
+                        }}
+                        onDelete={() => {
+                          if (confirm('Delete this item?')) {
+                            deleteMenuItem.mutate(item.id);
+                          }
+                        }}
+                        onToggleAvailability={() => toggleAvailability(item)}
+                        onMoveUp={() => moveItem(item, 'up')}
+                        onMoveDown={() => moveItem(item, 'down')}
+                        isUpdating={updateMenuItem.isPending}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground py-4">
+                      No items in this category
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </section>
+        </TabsContent>
+
+        <TabsContent value="preview">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Eye className="h-5 w-5" />
+                Guest Menu Preview
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                This is how available items appear to guests. Unavailable items are hidden.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="max-w-md mx-auto border rounded-lg p-4 bg-background shadow-sm">
+                <MenuPreview 
+                  items={menuItems || []} 
+                  categories={categories || []} 
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </AdminLayout>
   );
 }
