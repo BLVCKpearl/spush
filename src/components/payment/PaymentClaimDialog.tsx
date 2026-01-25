@@ -20,6 +20,7 @@ interface PaymentClaimDialogProps {
   onOpenChange: (open: boolean) => void;
   orderId: string;
   orderReference: string;
+  onSuccess?: () => void;
 }
 
 export function PaymentClaimDialog({
@@ -27,6 +28,7 @@ export function PaymentClaimDialog({
   onOpenChange,
   orderId,
   orderReference,
+  onSuccess,
 }: PaymentClaimDialogProps) {
   const [senderName, setSenderName] = useState('');
   const [bankName, setBankName] = useState('');
@@ -65,6 +67,7 @@ export function PaymentClaimDialog({
       toast.success('Payment claim submitted successfully');
       onOpenChange(false);
       resetForm();
+      onSuccess?.();
     } catch (error) {
       toast.error('Failed to submit payment claim');
       console.error('Payment claim error:', error);

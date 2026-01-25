@@ -10,8 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { PaymentClaimDialog } from '@/components/payment/PaymentClaimDialog';
-import { 
+import {
   CheckCircle2, 
   Clock, 
   ChefHat, 
@@ -19,7 +18,6 @@ import {
   Loader2,
   Search,
   CreditCard,
-  Send,
   XCircle,
   Banknote,
   UtensilsCrossed,
@@ -104,7 +102,6 @@ export default function TrackOrderPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchRef, setSearchRef] = useState(reference || '');
-  const [claimDialogOpen, setClaimDialogOpen] = useState(false);
   
   const activeReference = reference || searchRef;
   const { data: order, isLoading, refetch } = useOrder(activeReference);
@@ -145,7 +142,6 @@ export default function TrackOrderPage() {
   const isBankTransfer = order?.payment_method === 'bank_transfer';
   const hasClaim = paymentClaims && paymentClaims.length > 0;
   const isExpired = order?.status === 'expired';
-  const showClaimButton = isBankTransfer && !order?.payment_confirmed && !hasClaim && !isExpired;
   const showSearch = !reference;
 
   return (
@@ -258,46 +254,30 @@ export default function TrackOrderPage() {
               </Card>
             )}
 
-            {/* Payment Claim Section for Bank Transfer */}
-            {isBankTransfer && !order.payment_confirmed && !isExpired && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Payment Action Required</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {hasClaim ? (
-                    <div className="p-4 rounded-lg bg-muted">
-                      <div className="flex items-center gap-2 text-primary">
-                        <Send className="h-5 w-5" />
-                        <span className="font-medium">Transfer Claim Submitted</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        We've received your transfer notification. Awaiting confirmation from the restaurant.
-                      </p>
-                      {paymentClaims[0]?.proof_url && (
-                        <div className="mt-3">
-                          <p className="text-xs text-muted-foreground mb-1">Uploaded proof:</p>
-                          <img
-                            src={paymentClaims[0].proof_url}
-                            alt="Payment proof"
-                            className="w-full max-w-xs h-auto rounded-md border"
-                          />
-                        </div>
-                      )}
+            {/* Payment Status Message for Bank Transfer */}
+            {isBankTransfer && !order.payment_confirmed && !isExpired && hasClaim && (
+              <Card className="bg-primary/5 border-primary">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-full bg-primary/10">
+                      <ChefHat className="h-5 w-5 text-primary" />
                     </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <p className="text-sm text-muted-foreground">
-                        Completed your bank transfer? Let us know so we can start preparing your order.
+                    <div>
+                      <p className="font-medium text-primary">Preparing Your Order</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Your order is being prepared in the kitchen while we confirm your payment. 
+                        You'll be notified once payment is verified.
                       </p>
-                      <Button
-                        onClick={() => setClaimDialogOpen(true)}
-                        className="w-full"
-                        size="lg"
-                      >
-                        <CreditCard className="mr-2 h-5 w-5" />
-                        I've Transferred
-                      </Button>
+                    </div>
+                  </div>
+                  {paymentClaims[0]?.proof_url && (
+                    <div className="mt-4 pt-3 border-t">
+                      <p className="text-xs text-muted-foreground mb-2">Your uploaded proof:</p>
+                      <img
+                        src={paymentClaims[0].proof_url}
+                        alt="Payment proof"
+                        className="w-full max-w-xs h-auto rounded-md border"
+                      />
                     </div>
                   )}
                 </CardContent>
@@ -326,13 +306,6 @@ export default function TrackOrderPage() {
               </CardContent>
             </Card>
 
-            {/* Payment Claim Dialog */}
-            <PaymentClaimDialog
-              open={claimDialogOpen}
-              onOpenChange={setClaimDialogOpen}
-              orderId={order.id}
-              orderReference={order.order_reference}
-            />
           </>
         )}
       </div>
