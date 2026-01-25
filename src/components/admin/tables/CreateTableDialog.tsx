@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { useVenues } from '@/hooks/useVenues';
+import type { TableWithVenue } from '@/hooks/useTables';
 
 const singleSchema = z.object({
   venue_id: z.string().min(1, 'Please select a venue'),
@@ -47,6 +49,30 @@ interface CreateTableDialogProps {
   onCreateSingle: (data: { venue_id: string; label: string }) => Promise<void>;
   onCreateBulk: (data: { venue_id: string; labels: string[] }) => Promise<void>;
   isLoading: boolean;
+  existingTables?: TableWithVenue[];
+}
+
+// Helper to extract number suffix from a label given a prefix
+function extractNumberFromLabel(label: string, prefix: string): number | null {
+  if (!label.toLowerCase().startsWith(prefix.toLowerCase())) return null;
+  const suffix = label.slice(prefix.length).trim();
+  const num = parseInt(suffix, 10);
+  return isNaN(num) ? null : num;
+}
+
+// Calculate next available start number for a venue and prefix
+function getNextAvailableStart(
+  existingTables: TableWithVenue[],
+  venueId: string,
+  prefix: string
+): number {
+  const venueTables = existingTables.filter((t) => t.venue_id === venueId);
+  const numbers = venueTables
+    .map((t) => extractNumberFromLabel(t.label, prefix))
+    .filter((n): n is number => n !== null);
+  
+  if (numbers.length === 0) return 1;
+  return Math.max(...numbers) + 1;
 }
 
 export function CreateTableDialog({
@@ -55,6 +81,7 @@ export function CreateTableDialog({
   onCreateSingle,
   onCreateBulk,
   isLoading,
+  existingTables = [],
 }: CreateTableDialogProps) {
   const [tab, setTab] = useState<'single' | 'bulk-number' | 'bulk-list'>('single');
   const { data: venues, isLoading: venuesLoading } = useVenues();
@@ -73,6 +100,18 @@ export function CreateTableDialog({
     resolver: zodResolver(bulkListSchema),
     defaultValues: { venue_id: '', labels: '' },
   });
+
+  // Watch venue and prefix to auto-adjust start number
+  const bulkVenueId = bulkNumberForm.watch('venue_id');
+  const bulkPrefix = bulkNumberForm.watch('prefix');
+
+  // Calculate suggested start when venue or prefix changes
+  useEffect(() => {
+    if (bulkVenueId && bulkPrefix) {
+      const nextStart = getNextAvailableStart(existingTables, bulkVenueId, bulkPrefix);
+      bulkNumberForm.setValue('start', nextStart);
+    }
+  }, [bulkVenueId, bulkPrefix, existingTables, bulkNumberForm]);
 
   const handleSingleSubmit = async (values: z.infer<typeof singleSchema>) => {
     await onCreateSingle({ venue_id: values.venue_id, label: values.label });

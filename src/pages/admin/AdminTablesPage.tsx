@@ -67,6 +67,10 @@ export default function AdminTablesPage() {
   const [bulkDownloading, setBulkDownloading] = useState(false);
 
   const { data: venues, isLoading: venuesLoading } = useVenues();
+  
+  // Fetch ALL tables (unfiltered) for duplicate detection in create dialog
+  const { tables: allTables } = useTables();
+  
   const {
     tables,
     isLoading: tablesLoading,
@@ -311,6 +315,7 @@ export default function AdminTablesPage() {
         onCreateSingle={handleCreateSingle}
         onCreateBulk={handleCreateBulk}
         isLoading={createTable.isPending || createBulkTables.isPending}
+        existingTables={allTables}
       />
 
       <TableQRDialog
