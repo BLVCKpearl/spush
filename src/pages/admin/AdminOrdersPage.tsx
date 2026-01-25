@@ -23,7 +23,8 @@ import {
   Loader2,
   Banknote,
   CreditCard,
-  XCircle
+  XCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { OrderStatus, OrderWithItems } from '@/types/database';
@@ -37,6 +38,7 @@ const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType
   ready: { label: 'Ready', icon: Bell, variant: 'default' },
   completed: { label: 'Completed', icon: CheckCircle2, variant: 'secondary' },
   cancelled: { label: 'Cancelled', icon: XCircle, variant: 'destructive' },
+  expired: { label: 'Expired', icon: AlertTriangle, variant: 'destructive' },
 };
 
 const statusFlow: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'completed'];
@@ -48,11 +50,11 @@ export default function AdminOrdersPage() {
   const confirmPayment = useConfirmPayment();
 
   const activeOrders = orders?.filter(
-    (o) => !['completed', 'cancelled'].includes(o.status)
+    (o) => !['completed', 'cancelled', 'expired'].includes(o.status)
   ) || [];
   
   const completedOrders = orders?.filter(
-    (o) => ['completed', 'cancelled'].includes(o.status)
+    (o) => ['completed', 'cancelled', 'expired'].includes(o.status)
   ) || [];
 
   const handleStatusUpdate = async (orderId: string, newStatus: OrderStatus) => {
@@ -204,7 +206,8 @@ function OrderCard({
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2">
-          {!order.payment_confirmed && (
+          {/* Only show confirm payment if order is not expired */}
+          {!order.payment_confirmed && order.status !== 'expired' && (
             <Button 
               variant="outline" 
               size="sm"
@@ -249,7 +252,7 @@ function OrderCard({
             </Button>
           )}
 
-          {order.status !== 'cancelled' && order.status !== 'completed' && (
+          {order.status !== 'cancelled' && order.status !== 'completed' && order.status !== 'expired' && (
             <Button 
               variant="destructive" 
               size="sm"
