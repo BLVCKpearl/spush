@@ -11,7 +11,8 @@ import {
   BarChart3,
   Users,
   LogOut,
-  Loader2
+  Loader2,
+  QrCode
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -29,6 +30,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/admin/orders', label: 'Orders', icon: ClipboardList },
+  { to: '/admin/tables', label: 'Tables', icon: QrCode, adminOnly: true },
   { to: '/admin/analytics', label: 'Analytics', icon: BarChart3, adminOnly: true },
   { to: '/admin/menu', label: 'Menu', icon: UtensilsCrossed, adminOnly: true },
   { to: '/admin/bank-details', label: 'Bank Details', icon: CreditCard, adminOnly: true },
