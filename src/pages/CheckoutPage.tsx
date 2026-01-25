@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
 import { useTableSession } from '@/hooks/useTableSession';
 import { useCreateOrder } from '@/hooks/useOrders';
+import { usePersistedIdempotencyKey, clearStoredIdempotencyKey } from '@/hooks/useIdempotency';
 import { formatNaira } from '@/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ export default function CheckoutPage() {
   const { session } = useTableSession();
   const { items, tableNumber, tableSession, getTotalKobo, clearCart } = useCart();
   const createOrder = useCreateOrder();
+  const { idempotencyKey, clearKey } = usePersistedIdempotencyKey();
   
   const [customerName, setCustomerName] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('bank_transfer');
@@ -60,15 +62,23 @@ export default function CheckoutPage() {
         customerName: customerName.trim() || undefined,
         paymentMethod,
         items,
+        idempotencyKey, // Prevent duplicate orders
       });
 
       clearCart();
+      clearKey(); // Clear idempotency key after successful order
+      clearStoredIdempotencyKey();
       toast.success('Order placed successfully!');
       // Redirect to confirmation page with order reference
       navigate(`/order-confirmation/${order.order_reference}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to place order:', error);
-      toast.error('Failed to place order. Please try again.');
+      // Show specific error message for rate limiting
+      if (error?.message?.includes('Too many orders')) {
+        toast.error(error.message);
+      } else {
+        toast.error('Failed to place order. Please try again.');
+      }
     }
   };
 

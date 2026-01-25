@@ -47,7 +47,29 @@ export function useCreatePaymentConfirmation() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Create payment confirmation
+      // 1. Check if payment already confirmed (prevent double confirmation)
+      const { data: existingConfirmation } = await supabase
+        .from('payment_confirmations')
+        .select('id')
+        .eq('order_id', orderId)
+        .maybeSingle();
+
+      if (existingConfirmation) {
+        throw new Error('Payment has already been confirmed for this order');
+      }
+
+      // 2. Also check order's payment_confirmed flag
+      const { data: order } = await supabase
+        .from('orders')
+        .select('payment_confirmed, status')
+        .eq('id', orderId)
+        .single();
+
+      if (order?.payment_confirmed) {
+        throw new Error('Payment has already been confirmed for this order');
+      }
+
+      // 3. Create payment confirmation
       const { data: confirmation, error: confirmError } = await supabase
         .from('payment_confirmations')
         .insert({
@@ -59,9 +81,15 @@ export function useCreatePaymentConfirmation() {
         .select()
         .single();
 
-      if (confirmError) throw confirmError;
+      if (confirmError) {
+        // Handle unique constraint violation (race condition)
+        if (confirmError.code === '23505') {
+          throw new Error('Payment has already been confirmed for this order');
+        }
+        throw confirmError;
+      }
 
-      // Update order status to confirmed and set payment_confirmed
+      // 4. Update order status to confirmed and set payment_confirmed
       const { error: updateError } = await supabase
         .from('orders')
         .update({ 
