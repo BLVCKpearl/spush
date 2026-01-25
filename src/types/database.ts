@@ -30,6 +30,8 @@ export interface MenuItemWithCategory extends MenuItem {
 export interface Order {
   id: string;
   order_reference: string;
+  venue_id: string | null;
+  table_id: string | null;
   table_number: number;
   customer_name: string | null;
   status: OrderStatus;
@@ -40,12 +42,19 @@ export interface Order {
   updated_at: string;
 }
 
+export interface ItemSnapshot {
+  name: string;
+  description: string | null;
+  price_kobo: number;
+}
+
 export interface OrderItem {
   id: string;
   order_id: string;
   menu_item_id: string;
   quantity: number;
   unit_price_kobo: number;
+  item_snapshot: ItemSnapshot;
   created_at: string;
 }
 

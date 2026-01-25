@@ -120,6 +120,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          item_snapshot: Json
           menu_item_id: string
           order_id: string
           quantity: number
@@ -128,6 +129,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          item_snapshot?: Json
           menu_item_id: string
           order_id: string
           quantity: number
@@ -136,6 +138,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          item_snapshot?: Json
           menu_item_id?: string
           order_id?: string
           quantity?: number
@@ -167,9 +170,11 @@ export type Database = {
           payment_confirmed: boolean
           payment_method: Database["public"]["Enums"]["payment_method"]
           status: Database["public"]["Enums"]["order_status"]
+          table_id: string | null
           table_number: number
           total_kobo: number
           updated_at: string
+          venue_id: string | null
         }
         Insert: {
           created_at?: string
@@ -179,9 +184,11 @@ export type Database = {
           payment_confirmed?: boolean
           payment_method: Database["public"]["Enums"]["payment_method"]
           status?: Database["public"]["Enums"]["order_status"]
+          table_id?: string | null
           table_number: number
           total_kobo?: number
           updated_at?: string
+          venue_id?: string | null
         }
         Update: {
           created_at?: string
@@ -191,11 +198,28 @@ export type Database = {
           payment_confirmed?: boolean
           payment_method?: Database["public"]["Enums"]["payment_method"]
           status?: Database["public"]["Enums"]["order_status"]
+          table_id?: string | null
           table_number?: number
           total_kobo?: number
           updated_at?: string
+          venue_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "orders_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "tables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payment_proofs: {
         Row: {
