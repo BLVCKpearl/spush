@@ -38,14 +38,17 @@ const navItems: NavItem[] = [
 ];
 
 export default function AdminLayout({ children, title }: AdminLayoutProps) {
-  const { user, role, isAdmin, isStaff, loading, signOut } = useAuth();
+  const auth = useAuth();
   const navigate = useNavigate();
 
+  const { user, isAdmin, isStaff, loading, signOut } = auth;
+  const isAuthorized = !!user && (isAdmin || isStaff);
+
   useEffect(() => {
-    if (!loading && (!user || (!isAdmin && !isStaff))) {
+    if (!loading && !isAuthorized) {
       navigate('/admin/login');
     }
-  }, [loading, user, isAdmin, isStaff, navigate]);
+  }, [loading, isAuthorized, navigate]);
 
   if (loading) {
     return (
@@ -55,7 +58,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
     );
   }
 
-  if (!user || (!isAdmin && !isStaff)) {
+  if (!isAuthorized) {
     return null;
   }
 
