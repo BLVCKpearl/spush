@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import type { OrderWithItems } from '@/types/database';
 import type { PaymentClaim } from '@/hooks/usePaymentClaims';
+import SecureProofImage from './SecureProofImage';
 
 interface PaymentConfirmDialogProps {
   open: boolean;
@@ -161,10 +162,9 @@ export default function PaymentConfirmDialog({
                       <ImageIcon className="h-4 w-4" />
                       Payment Proof
                     </div>
-                    <img
-                      src={paymentClaim.proof_url}
+                    <SecureProofImage
+                      proofUrl={paymentClaim.proof_url}
                       alt="Payment proof"
-                      className="w-full rounded-lg border max-h-64 object-contain bg-background"
                     />
                   </div>
                 )}

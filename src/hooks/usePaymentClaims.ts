@@ -61,6 +61,8 @@ export function useCreatePaymentClaim() {
 
         if (uploadError) throw uploadError;
 
+        // Store the full public URL pattern (for backwards compatibility)
+        // The signed URL hook will extract the file path from this
         const { data: { publicUrl } } = supabase.storage
           .from('payment-proofs')
           .getPublicUrl(fileName);
