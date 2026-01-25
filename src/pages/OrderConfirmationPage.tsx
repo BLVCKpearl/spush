@@ -2,12 +2,11 @@ import { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useOrder, useUploadPaymentProof } from '@/hooks/useOrders';
 import { useBankDetails } from '@/hooks/useBankDetails';
+import { useTableSession } from '@/hooks/useTableSession';
 import { formatNaira } from '@/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Input } from '@/components/ui/input';
 import { 
   CheckCircle2, 
   Clock, 
@@ -16,23 +15,30 @@ import {
   Loader2,
   Copy,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Banknote,
+  CreditCard,
+  AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
+import type { OrderStatus } from '@/types/database';
 
-const statusConfig = {
+const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType; color: string }> = {
   pending: { label: 'Order Received', icon: Clock, color: 'bg-yellow-500' },
+  pending_payment: { label: 'Awaiting Payment', icon: CreditCard, color: 'bg-amber-500' },
+  cash_on_delivery: { label: 'Pay on Delivery', icon: Banknote, color: 'bg-blue-500' },
   confirmed: { label: 'Confirmed', icon: CheckCircle2, color: 'bg-blue-500' },
   preparing: { label: 'Preparing', icon: ChefHat, color: 'bg-orange-500' },
   ready: { label: 'Ready', icon: Bell, color: 'bg-green-500' },
   completed: { label: 'Completed', icon: CheckCircle2, color: 'bg-gray-500' },
-  cancelled: { label: 'Cancelled', icon: Clock, color: 'bg-red-500' },
+  cancelled: { label: 'Cancelled', icon: AlertCircle, color: 'bg-red-500' },
 };
 
 export default function OrderConfirmationPage() {
   const { reference } = useParams<{ reference: string }>();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { session } = useTableSession();
   
   const { data: order, isLoading } = useOrder(reference || '');
   const { data: bankDetails } = useBankDetails();
@@ -53,12 +59,13 @@ export default function OrderConfirmationPage() {
       <div className="min-h-screen bg-background p-4">
         <Card className="max-w-md mx-auto mt-12">
           <CardContent className="p-6 text-center">
+            <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h1 className="text-xl font-semibold mb-4">Order Not Found</h1>
             <p className="text-muted-foreground mb-4">
               We couldn't find an order with this reference.
             </p>
-            <Button onClick={() => navigate('/order')}>
-              Place New Order
+            <Button onClick={() => navigate('/')}>
+              Go Home
             </Button>
           </CardContent>
         </Card>
@@ -68,6 +75,9 @@ export default function OrderConfirmationPage() {
 
   const status = statusConfig[order.status];
   const StatusIcon = status.icon;
+  const isCashPayment = order.payment_method === 'cash';
+  const isBankTransfer = order.payment_method === 'bank_transfer';
+  const isPendingPayment = order.status === 'pending_payment';
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -99,6 +109,19 @@ export default function OrderConfirmationPage() {
 
   const hasUploadedProof = order.payment_proofs && order.payment_proofs.length > 0;
 
+  // Use item snapshot for display, fallback to menu_items
+  const getItemName = (item: typeof order.order_items[0]) => {
+    return item.item_snapshot?.name || item.menu_items?.name || 'Unknown Item';
+  };
+
+  const handleBackToMenu = () => {
+    if (session) {
+      navigate(`/menu/${session.venueSlug}`);
+    } else {
+      navigate(`/order?table=${order.table_number}`);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background pb-8">
       {/* Header */}
@@ -111,12 +134,14 @@ export default function OrderConfirmationPage() {
       </header>
 
       <main className="p-4 space-y-4 max-w-md mx-auto -mt-4">
-        {/* Order Reference */}
-        <Card>
+        {/* Order Reference - Prominent */}
+        <Card className="border-2 border-primary">
           <CardContent className="p-4 text-center">
             <p className="text-sm text-muted-foreground mb-1">Order Reference</p>
             <div className="flex items-center justify-center gap-2">
-              <p className="text-2xl font-bold tracking-wider">{order.order_reference}</p>
+              <p className="text-3xl font-bold tracking-wider text-primary">
+                {order.order_reference}
+              </p>
               <Button 
                 variant="ghost" 
                 size="icon"
@@ -125,15 +150,18 @@ export default function OrderConfirmationPage() {
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Save this reference to track your order
+            </p>
           </CardContent>
         </Card>
 
         {/* Order Status */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-3">
             <CardTitle className="text-base">Order Status</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-full ${status.color} text-white`}>
                 <StatusIcon className="h-5 w-5" />
@@ -141,21 +169,48 @@ export default function OrderConfirmationPage() {
               <div>
                 <p className="font-medium">{status.label}</p>
                 <p className="text-sm text-muted-foreground">
-                  {order.payment_confirmed ? 'Payment confirmed' : 'Awaiting payment confirmation'}
+                  {order.payment_confirmed 
+                    ? 'Payment confirmed' 
+                    : isCashPayment 
+                      ? 'Pay staff when your order arrives'
+                      : 'Awaiting payment'}
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
+        {/* Cash Payment Instructions */}
+        {isCashPayment && !order.payment_confirmed && (
+          <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
+            <CardContent className="p-4">
+              <div className="flex gap-3">
+                <Banknote className="h-6 w-6 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-blue-900 dark:text-blue-100">
+                    Pay with Cash
+                  </p>
+                  <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                    A staff member will deliver your order and collect payment of{' '}
+                    <span className="font-bold">{formatNaira(order.total_kobo)}</span> at your table.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Bank Transfer Details */}
-        {order.payment_method === 'bank_transfer' && bankDetails && !order.payment_confirmed && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Bank Transfer Details</CardTitle>
+        {isBankTransfer && isPendingPayment && bankDetails && (
+          <Card className="bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Bank Transfer Details
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="bg-muted rounded-lg p-4 space-y-3">
+            <CardContent className="pt-0 space-y-4">
+              <div className="bg-background rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Bank Name</span>
                   <span className="font-medium">{bankDetails.bank_name}</span>
@@ -163,13 +218,13 @@ export default function OrderConfirmationPage() {
                 <Separator />
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Account Name</span>
-                  <span className="font-medium">{bankDetails.account_name}</span>
+                  <span className="font-medium text-right">{bankDetails.account_name}</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Account Number</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{bankDetails.account_number}</span>
+                    <span className="font-bold text-lg">{bankDetails.account_number}</span>
                     <Button 
                       variant="ghost" 
                       size="icon" 
@@ -183,31 +238,20 @@ export default function OrderConfirmationPage() {
                 <Separator />
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Amount</span>
-                  <span className="font-bold text-lg">{formatNaira(order.total_kobo)}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Reference</span>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{order.order_reference}</span>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8"
-                      onClick={() => copyToClipboard(order.order_reference, 'Reference')}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <span className="font-bold text-xl text-primary">
+                    {formatNaira(order.total_kobo)}
+                  </span>
                 </div>
               </div>
               
-              <p className="text-sm text-muted-foreground text-center">
-                Please include the order reference in your transfer narration
-              </p>
+              <div className="bg-amber-100 dark:bg-amber-900 rounded-lg p-3">
+                <p className="text-sm text-amber-800 dark:text-amber-200 text-center">
+                  <strong>Important:</strong> Include <strong>{order.order_reference}</strong> as your transfer narration
+                </p>
+              </div>
 
               {/* Upload Payment Proof */}
-              <div className="border-t pt-4">
+              <div className="pt-2">
                 <p className="text-sm font-medium mb-3">Upload Payment Proof (Optional)</p>
                 <input
                   ref={fileInputRef}
@@ -218,7 +262,7 @@ export default function OrderConfirmationPage() {
                 />
                 
                 {hasUploadedProof ? (
-                  <div className="flex items-center gap-2 text-green-600 bg-green-50 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 text-green-600 bg-green-50 dark:bg-green-950 p-3 rounded-lg">
                     <CheckCircle2 className="h-5 w-5" />
                     <span className="text-sm">Payment proof uploaded</span>
                   </div>
@@ -261,55 +305,47 @@ export default function OrderConfirmationPage() {
           </Card>
         )}
 
-        {/* Cash Payment Info */}
-        {order.payment_method === 'cash' && !order.payment_confirmed && (
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-muted rounded-full">
-                  <Clock className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="font-medium">Pay with Cash</p>
-                  <p className="text-sm text-muted-foreground">
-                    A waiter will come to collect payment at your table
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Order Items */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-3">
             <CardTitle className="text-base">Order Details</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="pt-0 space-y-3">
             {order.order_items.map((item) => (
               <div key={item.id} className="flex justify-between text-sm">
-                <span>
-                  {item.menu_items.name} × {item.quantity}
+                <span className="text-muted-foreground">
+                  {getItemName(item)} × {item.quantity}
                 </span>
-                <span>{formatNaira(item.unit_price_kobo * item.quantity)}</span>
+                <span className="tabular-nums">
+                  {formatNaira(item.unit_price_kobo * item.quantity)}
+                </span>
               </div>
             ))}
             <Separator />
-            <div className="flex justify-between font-semibold">
+            <div className="flex justify-between font-semibold text-lg">
               <span>Total</span>
-              <span>{formatNaira(order.total_kobo)}</span>
+              <span className="tabular-nums">{formatNaira(order.total_kobo)}</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* New Order Button */}
-        <Button 
-          variant="outline" 
-          className="w-full"
-          onClick={() => navigate(`/order?table=${order.table_number}`)}
-        >
-          Place Another Order
-        </Button>
+        {/* Actions */}
+        <div className="space-y-3">
+          <Button 
+            variant="outline" 
+            className="w-full"
+            onClick={() => navigate(`/track/${order.order_reference}`)}
+          >
+            Track Order Status
+          </Button>
+          <Button 
+            variant="ghost" 
+            className="w-full"
+            onClick={handleBackToMenu}
+          >
+            Place Another Order
+          </Button>
+        </div>
       </main>
     </div>
   );

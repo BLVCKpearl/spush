@@ -1,6 +1,6 @@
 // Database types for the restaurant ordering system
 
-export type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+export type OrderStatus = 'pending' | 'pending_payment' | 'cash_on_delivery' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
 export type PaymentMethod = 'bank_transfer' | 'cash';
 
 export interface Category {

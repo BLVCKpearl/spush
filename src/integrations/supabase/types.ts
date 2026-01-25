@@ -351,6 +351,8 @@ export type Database = {
         | "ready"
         | "completed"
         | "cancelled"
+        | "pending_payment"
+        | "cash_on_delivery"
       payment_method: "bank_transfer" | "cash"
     }
     CompositeTypes: {
@@ -487,6 +489,8 @@ export const Constants = {
         "ready",
         "completed",
         "cancelled",
+        "pending_payment",
+        "cash_on_delivery",
       ],
       payment_method: ["bank_transfer", "cash"],
     },
