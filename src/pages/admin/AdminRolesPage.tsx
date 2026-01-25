@@ -37,7 +37,8 @@ type AppRole = 'admin' | 'staff';
 
 interface UserWithRoles {
   id: string;
-  email: string;
+  email: string | null;
+  displayName: string | null;
   roles: AppRole[];
 }
 
@@ -56,6 +57,19 @@ export default function AdminRolesPage() {
 
       if (rolesError) throw rolesError;
 
+      // Get all profiles
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('user_id, email, display_name');
+
+      if (profilesError) throw profilesError;
+
+      // Create a map of profiles by user_id
+      const profilesMap = new Map<string, { email: string | null; displayName: string | null }>();
+      profiles?.forEach((p) => {
+        profilesMap.set(p.user_id, { email: p.email, displayName: p.display_name });
+      });
+
       // Group roles by user_id
       const userRolesMap = new Map<string, AppRole[]>();
       const userIds = new Set<string>();
@@ -66,13 +80,16 @@ export default function AdminRolesPage() {
         userRolesMap.set(r.user_id, [...existing, r.role as AppRole]);
       });
 
-      // For now, we'll display users based on their roles
-      // In a production app, you'd want a profiles table or admin API
-      const usersWithRoles: UserWithRoles[] = Array.from(userIds).map((userId) => ({
-        id: userId,
-        email: `User ${userId.slice(0, 8)}...`, // Placeholder - see note below
-        roles: userRolesMap.get(userId) || [],
-      }));
+      // Build users list with profile data
+      const usersWithRoles: UserWithRoles[] = Array.from(userIds).map((userId) => {
+        const profile = profilesMap.get(userId);
+        return {
+          id: userId,
+          email: profile?.email || null,
+          displayName: profile?.displayName || null,
+          roles: userRolesMap.get(userId) || [],
+        };
+      });
 
       setUsers(usersWithRoles);
     } catch (error) {
@@ -168,7 +185,7 @@ export default function AdminRolesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>User ID</TableHead>
+                <TableHead>User</TableHead>
                 <TableHead>Current Roles</TableHead>
                 <TableHead>Add Role</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -184,8 +201,18 @@ export default function AdminRolesPage() {
               ) : (
                 users.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell className="font-mono text-sm">
-                      {user.id.slice(0, 8)}...
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="font-medium">
+                          {user.displayName || 'Unknown User'}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {user.email || 'No email'}
+                        </div>
+                        <div className="text-xs text-muted-foreground font-mono">
+                          {user.id.slice(0, 8)}...
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2 flex-wrap">
