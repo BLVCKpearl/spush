@@ -52,10 +52,12 @@ export function useCreateUser() {
       email,
       fullName,
       role,
+      password,
     }: {
       email: string;
       fullName: string;
       role: 'admin' | 'staff';
+      password: string;
     }) => {
       const { data, error } = await supabase.functions.invoke('manage-users', {
         body: {
@@ -63,13 +65,14 @@ export function useCreateUser() {
           email,
           fullName,
           role,
+          password,
         },
       });
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      return data as { success: boolean; userId: string; temporaryPassword: string };
+      return data as { success: boolean; userId: string; password: string };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['managed-users'] });

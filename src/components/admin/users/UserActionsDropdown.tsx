@@ -6,13 +6,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, Pencil, KeyRound, UserX, UserCheck } from 'lucide-react';
+import { MoreHorizontal, Pencil, KeyRound, Lock, UserX, UserCheck } from 'lucide-react';
 import type { ManagedUser } from '@/hooks/useUserManagement';
 
 interface UserActionsDropdownProps {
   user: ManagedUser;
   onEdit: () => void;
   onResetPassword: () => void;
+  onModifyPassword: () => void;
   onToggleActive: () => void;
 }
 
@@ -20,6 +21,7 @@ export default function UserActionsDropdown({
   user,
   onEdit,
   onResetPassword,
+  onModifyPassword,
   onToggleActive,
 }: UserActionsDropdownProps) {
   return (
@@ -38,6 +40,10 @@ export default function UserActionsDropdown({
         <DropdownMenuItem onClick={onResetPassword}>
           <KeyRound className="h-4 w-4 mr-2" />
           Reset Password
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onModifyPassword}>
+          <Lock className="h-4 w-4 mr-2" />
+          Modify Password
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

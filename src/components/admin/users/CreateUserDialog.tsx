@@ -33,6 +33,7 @@ export default function CreateUserDialog({
 }: CreateUserDialogProps) {
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
+  const [password, setPassword] = useState('1234abcd');
   const [role, setRole] = useState<'admin' | 'staff'>('staff');
   const [tempPassword, setTempPassword] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -43,7 +44,7 @@ export default function CreateUserDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!email || !fullName || !role) {
+    if (!email || !fullName || !role || !password) {
       toast({
         title: 'Missing fields',
         description: 'Please fill in all required fields.',
@@ -52,9 +53,18 @@ export default function CreateUserDialog({
       return;
     }
 
+    if (password.length < 6) {
+      toast({
+        title: 'Password too short',
+        description: 'Password must be at least 6 characters.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
-      const result = await createUser.mutateAsync({ email, fullName, role });
-      setTempPassword(result.temporaryPassword);
+      const result = await createUser.mutateAsync({ email, fullName, role, password });
+      setTempPassword(result.password || password);
       toast({
         title: 'User created',
         description: 'User has been created successfully.',
@@ -79,6 +89,7 @@ export default function CreateUserDialog({
   const handleClose = () => {
     setEmail('');
     setFullName('');
+    setPassword('1234abcd');
     setRole('staff');
     setTempPassword(null);
     setCopied(false);
@@ -156,6 +167,22 @@ export default function CreateUserDialog({
                 onChange={(e) => setFullName(e.target.value)}
                 required
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="text"
+                placeholder="Password for new user"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+              />
+              <p className="text-xs text-muted-foreground">
+                Default password is 1234abcd. User should change it after first login.
+              </p>
             </div>
 
             <div className="space-y-2">
