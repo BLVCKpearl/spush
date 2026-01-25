@@ -175,10 +175,10 @@ Deno.serve(async (req) => {
           );
         }
 
-        // The profile will be created by the trigger, but update display_name
+        // The profile will be created by the trigger, but update display_name and set must_change_password
         await supabaseAdmin
           .from("profiles")
-          .update({ display_name: fullName })
+          .update({ display_name: fullName, must_change_password: true })
           .eq("user_id", newUser.user.id);
 
         // Assign role
@@ -338,6 +338,12 @@ Deno.serve(async (req) => {
           p_target_user_id: userId,
         });
 
+        // Set must_change_password flag
+        await supabaseAdmin
+          .from("profiles")
+          .update({ must_change_password: true })
+          .eq("user_id", userId);
+
         // Log audit
         await logAudit("password_reset", userId, {});
 
@@ -424,6 +430,12 @@ Deno.serve(async (req) => {
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
+
+        // Set must_change_password flag
+        await supabaseAdmin
+          .from("profiles")
+          .update({ must_change_password: true })
+          .eq("user_id", userId);
 
         // Log audit
         await logAudit("password_modified", userId, {});
