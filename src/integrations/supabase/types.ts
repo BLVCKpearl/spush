@@ -127,6 +127,47 @@ export type Database = {
           },
         ]
       }
+      order_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          new_status: Database["public"]["Enums"]["order_status"] | null
+          old_status: Database["public"]["Enums"]["order_status"] | null
+          order_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          new_status?: Database["public"]["Enums"]["order_status"] | null
+          old_status?: Database["public"]["Enums"]["order_status"] | null
+          order_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          new_status?: Database["public"]["Enums"]["order_status"] | null
+          old_status?: Database["public"]["Enums"]["order_status"] | null
+          order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           created_at: string
@@ -172,12 +213,31 @@ export type Database = {
           },
         ]
       }
+      order_rate_limits: {
+        Row: {
+          created_at: string
+          id: string
+          table_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          table_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          table_id?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           created_at: string
           customer_name: string | null
           expires_at: string | null
           id: string
+          idempotency_key: string | null
           order_reference: string
           payment_confirmed: boolean
           payment_method: Database["public"]["Enums"]["payment_method"]
@@ -193,6 +253,7 @@ export type Database = {
           customer_name?: string | null
           expires_at?: string | null
           id?: string
+          idempotency_key?: string | null
           order_reference: string
           payment_confirmed?: boolean
           payment_method: Database["public"]["Enums"]["payment_method"]
@@ -208,6 +269,7 @@ export type Database = {
           customer_name?: string | null
           expires_at?: string | null
           id?: string
+          idempotency_key?: string | null
           order_reference?: string
           payment_confirmed?: boolean
           payment_method?: Database["public"]["Enums"]["payment_method"]
@@ -460,11 +522,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_order_rate_limit: { Args: { p_table_id: string }; Returns: boolean }
       expire_pending_orders: { Args: never; Returns: number }
       generate_order_reference: { Args: never; Returns: string }
       get_order_expiry_minutes: {
         Args: { p_venue_id: string }
         Returns: number
+      }
+      has_payment_confirmation: {
+        Args: { p_order_id: string }
+        Returns: boolean
       }
       has_role: {
         Args: {
@@ -476,6 +543,10 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_admin_or_staff: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
+      record_order_rate_limit: {
+        Args: { p_table_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "staff"
