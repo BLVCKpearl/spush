@@ -3,11 +3,27 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import type { User, Session } from '@supabase/supabase-js';
 
+export type UserRole = 'admin' | 'staff' | null;
+
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [role, setRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
+
+  const fetchUserRole = async (userId: string): Promise<UserRole> => {
+    const { data: roles } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId);
+    
+    if (!roles || roles.length === 0) return null;
+    
+    // Prioritize admin role if user has multiple roles
+    if (roles.some(r => r.role === 'admin')) return 'admin';
+    if (roles.some(r => r.role === 'staff')) return 'staff';
+    return null;
+  };
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -17,17 +33,10 @@ export function useAuth() {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Check admin role
-          const { data: roles } = await supabase
-            .from('user_roles')
-            .select('role')
-            .eq('user_id', session.user.id)
-            .eq('role', 'admin')
-            .maybeSingle();
-          
-          setIsAdmin(!!roles);
+          const userRole = await fetchUserRole(session.user.id);
+          setRole(userRole);
         } else {
-          setIsAdmin(false);
+          setRole(null);
         }
         
         setLoading(false);
@@ -40,16 +49,10 @@ export function useAuth() {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', session.user.id)
-          .eq('role', 'admin')
-          .maybeSingle()
-          .then(({ data: roles }) => {
-            setIsAdmin(!!roles);
-            setLoading(false);
-          });
+        fetchUserRole(session.user.id).then((userRole) => {
+          setRole(userRole);
+          setLoading(false);
+        });
       } else {
         setLoading(false);
       }
@@ -82,10 +85,18 @@ export function useAuth() {
     return { error };
   };
 
+  // Computed properties for backward compatibility and convenience
+  const isAdmin = role === 'admin';
+  const isStaff = role === 'staff';
+  const isAuthenticated = !!user && (isAdmin || isStaff);
+
   return {
     user,
     session,
+    role,
     isAdmin,
+    isStaff,
+    isAuthenticated,
     loading,
     signIn,
     signUp,
@@ -93,15 +104,29 @@ export function useAuth() {
   };
 }
 
-export function useRequireAuth() {
-  const { user, isAdmin, loading } = useAuth();
+export function useRequireAuth(requiredRole?: 'admin' | 'staff' | 'any') {
+  const { user, role, isAdmin, isStaff, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loading && (!user || !isAdmin)) {
+    if (loading) return;
+
+    if (!user) {
+      navigate('/admin/login');
+      return;
+    }
+
+    // Check role requirements
+    const hasAccess = 
+      requiredRole === 'any' ? (isAdmin || isStaff) :
+      requiredRole === 'admin' ? isAdmin :
+      requiredRole === 'staff' ? (isAdmin || isStaff) : // Admin can do staff things too
+      (isAdmin || isStaff); // Default: any authenticated staff/admin
+
+    if (!hasAccess) {
       navigate('/admin/login');
     }
-  }, [user, isAdmin, loading, navigate]);
+  }, [user, role, isAdmin, isStaff, loading, navigate, requiredRole]);
 
-  return { user, isAdmin, loading };
+  return { user, role, isAdmin, isStaff, loading };
 }
