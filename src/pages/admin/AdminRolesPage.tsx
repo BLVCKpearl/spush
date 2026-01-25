@@ -144,6 +144,13 @@ export default function AdminRolesPage() {
     return role === 'admin' ? 'default' : 'secondary';
   };
 
+  // Count total admins to prevent removing the last one
+  const totalAdmins = users.filter(u => u.roles.includes('admin')).length;
+
+  const isLastAdmin = (userId: string, role: AppRole) => {
+    return role === 'admin' && totalAdmins === 1 && users.find(u => u.id === userId)?.roles.includes('admin');
+  };
+
   if (authLoading || loading) {
     return (
       <AdminLayout title="User Roles">
@@ -220,42 +227,46 @@ export default function AdminRolesPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
-                        {user.roles.map((role) => (
-                          <AlertDialog key={role}>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={actionLoading === `remove-${user.id}-${role}`}
-                              >
-                                {actionLoading === `remove-${user.id}-${role}` ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <>
-                                    <Trash2 className="h-4 w-4 mr-1" />
-                                    Remove {role}
-                                  </>
-                                )}
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Remove {role} role?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This will revoke {role} privileges from this user. They will lose access to {role === 'admin' ? 'all admin features' : 'staff features'}.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => removeRole(user.id, role)}
+                        {user.roles.map((role) => {
+                          const isLast = isLastAdmin(user.id, role);
+                          return (
+                            <AlertDialog key={role}>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={actionLoading === `remove-${user.id}-${role}` || isLast}
+                                  title={isLast ? 'Cannot remove the last admin' : undefined}
                                 >
-                                  Remove Role
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        ))}
+                                  {actionLoading === `remove-${user.id}-${role}` ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <Trash2 className="h-4 w-4 mr-1" />
+                                      Remove {role}
+                                    </>
+                                  )}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Remove {role} role?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will revoke {role} privileges from this user. They will lose access to {role === 'admin' ? 'all admin features' : 'staff features'}.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => removeRole(user.id, role)}
+                                  >
+                                    Remove Role
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          );
+                        })}
                       </div>
                     </TableCell>
                   </TableRow>
