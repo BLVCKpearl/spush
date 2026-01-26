@@ -75,6 +75,11 @@ export default function ChangeOwnPasswordDialog({
     }
 
     setIsSubmitting(true);
+
+    // Absolute safety: never allow the UI to remain stuck in a loading state.
+    const hardStop = window.setTimeout(() => {
+      if (mountedRef.current) setIsSubmitting(false);
+    }, 4000);
     
     try {
       const { error } = await supabase.auth.updateUser({
@@ -82,7 +87,7 @@ export default function ChangeOwnPasswordDialog({
       });
 
       // Always reset submitting state first, before any other state changes
-      setIsSubmitting(false);
+      if (mountedRef.current) setIsSubmitting(false);
 
       if (error) {
         toast({
@@ -98,21 +103,18 @@ export default function ChangeOwnPasswordDialog({
         description: 'Your password has been changed successfully.',
       });
       
-      // Reset form and close after a small delay to ensure state updates complete
+      // Reset form and close.
       resetForm();
-      // Use setTimeout to allow React to process state updates before closing
-      setTimeout(() => {
-        if (mountedRef.current) {
-          onOpenChange(false);
-        }
-      }, 100);
+      if (mountedRef.current) onOpenChange(false);
     } catch (error) {
-      setIsSubmitting(false);
+      if (mountedRef.current) setIsSubmitting(false);
       toast({
         title: 'Failed to update password',
         description: error instanceof Error ? error.message : 'An error occurred',
         variant: 'destructive',
       });
+    } finally {
+      window.clearTimeout(hardStop);
     }
   };
 
