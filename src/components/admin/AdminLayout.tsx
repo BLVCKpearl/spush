@@ -1,8 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { 
   LayoutDashboard, 
   ClipboardList, 
@@ -12,9 +19,12 @@ import {
   Users,
   LogOut,
   Loader2,
-  QrCode
+  QrCode,
+  KeyRound,
+  ChevronDown
 } from 'lucide-react';
 import { toast } from 'sonner';
+import ChangeOwnPasswordDialog from './ChangeOwnPasswordDialog';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -40,6 +50,7 @@ const navItems: NavItem[] = [
 export default function AdminLayout({ children, title }: AdminLayoutProps) {
   const auth = useAuth();
   const navigate = useNavigate();
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const { user, isAdmin, isStaff, loading, signOut } = auth;
   const isAuthorized = !!user && (isAdmin || isStaff);
@@ -90,13 +101,25 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
             </Badge>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground hidden md:block">
-              {user.email}
-            </span>
-            <Button variant="ghost" size="sm" onClick={handleSignOut}>
-              <LogOut className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Sign Out</span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-1">
+                  <span className="text-sm hidden md:block">{user.email}</span>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setChangePasswordOpen(true)}>
+                  <KeyRound className="h-4 w-4 mr-2" />
+                  Change Password
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSignOut}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
         
@@ -126,6 +149,12 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
         <h2 className="text-xl font-semibold mb-4">{title}</h2>
         {children}
       </main>
+
+      {/* Change Password Dialog */}
+      <ChangeOwnPasswordDialog
+        open={changePasswordOpen}
+        onOpenChange={setChangePasswordOpen}
+      />
     </div>
   );
 }

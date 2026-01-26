@@ -38,37 +38,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+    let initialLoadDone = false;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, nextSession) => {
+        if (!isMounted) return;
+        
         setSession(nextSession);
         setUser(nextSession?.user ?? null);
 
         if (nextSession?.user) {
-          const nextRole = await fetchUserRole(nextSession.user.id);
-          setRole(nextRole);
+          try {
+            const nextRole = await fetchUserRole(nextSession.user.id);
+            if (isMounted) setRole(nextRole);
+          } catch {
+            if (isMounted) setRole(null);
+          }
         } else {
           setRole(null);
         }
 
-        setLoading(false);
+        if (isMounted) setLoading(false);
+        initialLoadDone = true;
       }
     );
 
-    supabase.auth.getSession().then(async ({ data: { session: existing } }) => {
-      setSession(existing);
-      setUser(existing?.user ?? null);
+    // Only use getSession as fallback if onAuthStateChange hasn't fired yet
+    const timeout = setTimeout(async () => {
+      if (initialLoadDone || !isMounted) return;
+      
+      try {
+        const { data: { session: existing } } = await supabase.auth.getSession();
+        if (!isMounted || initialLoadDone) return;
+        
+        setSession(existing);
+        setUser(existing?.user ?? null);
 
-      if (existing?.user) {
-        const existingRole = await fetchUserRole(existing.user.id);
-        setRole(existingRole);
-      } else {
-        setRole(null);
+        if (existing?.user) {
+          const existingRole = await fetchUserRole(existing.user.id);
+          if (isMounted) setRole(existingRole);
+        } else {
+          setRole(null);
+        }
+      } catch {
+        // Ignore errors - auth state change will handle it
+      } finally {
+        if (isMounted) setLoading(false);
       }
+    }, 100);
 
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn: AuthContextValue["signIn"] = async (email, password) => {
