@@ -317,12 +317,12 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Generate new password
-        const newPassword = generateSecurePassword();
+        // Generate a temporary password for the user to login with
+        const tempPassword = generateSecurePassword();
 
-        // Update user password
+        // Update user password to the temporary one
         const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-          password: newPassword,
+          password: tempPassword,
         });
 
         if (updateError) {
@@ -333,19 +333,29 @@ Deno.serve(async (req) => {
           );
         }
 
+        // Set must_change_password flag so user is forced to change on next login
+        const { error: profileError } = await supabaseAdmin
+          .from("profiles")
+          .update({ must_change_password: true })
+          .eq("user_id", userId);
+
+        if (profileError) {
+          console.error("Error setting must_change_password:", profileError);
+        }
+
         // Record rate limit
         await supabaseAdmin.rpc("record_password_reset_attempt", {
           p_target_user_id: userId,
         });
 
         // Log audit
-        await logAudit("password_reset", userId, {});
+        await logAudit("password_reset", userId, { forced_change: true });
 
         return new Response(
           JSON.stringify({
             success: true,
-            temporaryPassword: newPassword,
-            message: "Password reset successfully. Share the new password securely.",
+            temporaryPassword: tempPassword,
+            message: "Password reset successfully. User must change password on next login.",
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
