@@ -25,6 +25,11 @@ import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminAccountPage from "./pages/admin/AdminAccountPage";
 import AdminForceResetPage from "./pages/admin/AdminForceResetPage";
 import AdminAuthTestPage from "./pages/admin/AdminAuthTestPage";
+import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
+import TenantsPage from "./pages/super-admin/TenantsPage";
+import AllUsersPage from "./pages/super-admin/AllUsersPage";
+import GlobalAnalyticsPage from "./pages/super-admin/GlobalAnalyticsPage";
+import SettingsPage from "./pages/super-admin/SettingsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -68,6 +73,14 @@ const App = () => (
                   <AdminAuthTestPage />
                 </StagingOnlyRoute>
               } />
+              {/* Super Admin Routes */}
+              <Route path="/super-admin" element={<SuperAdminDashboard />}>
+                <Route index element={<Navigate to="/super-admin/tenants" replace />} />
+                <Route path="tenants" element={<TenantsPage />} />
+                <Route path="users" element={<AllUsersPage />} />
+                <Route path="analytics" element={<GlobalAnalyticsPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+              </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

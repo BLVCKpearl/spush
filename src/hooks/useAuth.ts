@@ -10,8 +10,8 @@ export function useAuth() {
   return useAuthContext();
 }
 
-export function useRequireAuth(requiredRole?: 'admin' | 'staff' | 'any') {
-  const { user, role, isAdmin, isStaff, loading } = useAuth();
+export function useRequireAuth(requiredRole?: 'super_admin' | 'tenant_admin' | 'staff' | 'any') {
+  const { user, role, isSuperAdmin, isTenantAdmin, isStaff, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -24,15 +24,16 @@ export function useRequireAuth(requiredRole?: 'admin' | 'staff' | 'any') {
 
     // Check role requirements
     const hasAccess = 
-      requiredRole === 'any' ? (isAdmin || isStaff) :
-      requiredRole === 'admin' ? isAdmin :
-      requiredRole === 'staff' ? (isAdmin || isStaff) : // Admin can do staff things too
-      (isAdmin || isStaff); // Default: any authenticated staff/admin
+      requiredRole === 'any' ? (isSuperAdmin || isTenantAdmin || isStaff) :
+      requiredRole === 'super_admin' ? isSuperAdmin :
+      requiredRole === 'tenant_admin' ? (isSuperAdmin || isTenantAdmin) :
+      requiredRole === 'staff' ? (isSuperAdmin || isTenantAdmin || isStaff) :
+      (isSuperAdmin || isTenantAdmin || isStaff); // Default: any authenticated staff/admin
 
     if (!hasAccess) {
       navigate('/admin/login');
     }
-  }, [user, role, isAdmin, isStaff, loading, navigate, requiredRole]);
+  }, [user, role, isSuperAdmin, isTenantAdmin, isStaff, loading, navigate, requiredRole]);
 
-  return { user, role, isAdmin, isStaff, loading };
+  return { user, role, isSuperAdmin, isTenantAdmin, isStaff, loading };
 }

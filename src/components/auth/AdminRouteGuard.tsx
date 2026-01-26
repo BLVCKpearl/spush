@@ -223,7 +223,7 @@ export default function AdminRouteGuard({
   }
 
   // Check permission-based access
-  if (adminOnly && role !== 'admin') {
+  if (adminOnly && role !== 'tenant_admin' && role !== 'super_admin') {
     return <ForbiddenScreen />;
   }
 

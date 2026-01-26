@@ -71,7 +71,7 @@ export default function AdminLayout({
           <div className="flex h-14 items-center justify-between px-4">
             <div className="flex items-center gap-4">
               <h1 className="font-semibold text-foreground hidden sm:block">Restaurant Admin</h1>
-              <Badge variant={role === 'admin' ? 'default' : 'secondary'} className="text-xs capitalize">
+              <Badge variant={role === 'tenant_admin' || role === 'super_admin' ? 'default' : 'secondary'} className="text-xs capitalize">
                 {role}
               </Badge>
             </div>

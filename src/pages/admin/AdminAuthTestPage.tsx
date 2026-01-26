@@ -164,7 +164,7 @@ export default function AdminAuthTestPage() {
     // Verify the permission system by checking the permissions module
     const { getPermissions } = await import('@/lib/permissions');
     const staffPerms = getPermissions('staff');
-    const adminPerms = getPermissions('admin');
+    const adminPerms = getPermissions('tenant_admin');
 
     // Staff should NOT have canManageUsers
     if (!staffPerms.canManageUsers) {

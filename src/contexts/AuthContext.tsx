@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { AuthDiagnostics } from "@/components/auth/AuthErrorScreen";
 import { isNonProduction } from "@/lib/environment";
 
-export type UserRole = "admin" | "staff" | null;
+export type UserRole = "super_admin" | "tenant_admin" | "staff" | null;
 
 // Explicit auth state machine
 export type AuthState =
@@ -21,7 +21,10 @@ export type AuthContextValue = {
   user: User | null;
   session: Session | null;
   role: UserRole;
-  isAdmin: boolean;
+  tenantId: string | null; // Current tenant context
+  tenantIds: string[]; // All tenants user has access to
+  isSuperAdmin: boolean;
+  isTenantAdmin: boolean;
   isStaff: boolean;
   isAuthenticated: boolean;
   loading: boolean;
@@ -31,6 +34,7 @@ export type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<{ error: unknown | null }>;
   signUp: (email: string, password: string) => Promise<{ error: unknown | null }>;
   signOut: () => Promise<{ error: unknown | null }>;
+  setCurrentTenant: (tenantId: string) => void;
   retry: () => void;
   goToLogin: () => void;
   hardRefresh: () => void;
@@ -77,14 +81,18 @@ function shouldSimulateProfileFailure(): boolean {
   return localStorage.getItem('auth_test_simulate_profile_failure') === 'true';
 }
 
-// Helper to fetch role with timeout
+interface RoleInfo {
+  role: UserRole;
+  tenantIds: string[];
+}
+
+// Helper to fetch role with timeout - new multi-tenant aware version
 async function fetchUserRoleWithTimeout(
   userId: string,
   signal: AbortSignal
-): Promise<UserRole> {
+): Promise<RoleInfo> {
   // Check for simulation flag (non-prod only)
   if (shouldSimulateProfileFailure()) {
-    // Clear the flag so it only triggers once
     localStorage.removeItem('auth_test_simulate_profile_failure');
     throw new Error("Simulated profile fetch failure for testing");
   }
@@ -96,19 +104,68 @@ async function fetchUserRoleWithTimeout(
     signal.addEventListener("abort", () => clearTimeout(id));
   });
 
-  const fetchPromise = (async () => {
+  const fetchPromise = (async (): Promise<RoleInfo> => {
+    // First check if user is a super admin
+    const { data: superAdmin, error: superAdminError } = await supabase
+      .from("super_admins")
+      .select("id")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (signal.aborted) throw new Error("Aborted");
+    
+    if (superAdminError) {
+      console.error("Error checking super admin:", superAdminError);
+    }
+
+    if (superAdmin) {
+      // Super admin - has access to all tenants
+      return { role: "super_admin", tenantIds: [] };
+    }
+
+    // Check tenant roles
     const { data: roles, error } = await supabase
       .from("user_roles")
-      .select("role")
-      .eq("user_id", userId);
+      .select("tenant_role, tenant_id")
+      .eq("user_id", userId)
+      .not("tenant_role", "is", null);
 
     if (signal.aborted) throw new Error("Aborted");
     if (error) throw error;
 
-    if (!roles || roles.length === 0) return null;
-    if (roles.some((r) => r.role === "admin")) return "admin";
-    if (roles.some((r) => r.role === "staff")) return "staff";
-    return null;
+    if (!roles || roles.length === 0) {
+      // Fallback: check legacy roles (for transition)
+      const { data: legacyRoles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+      
+      if (legacyRoles && legacyRoles.length > 0) {
+        // Map legacy roles: admin -> tenant_admin, staff -> staff
+        if (legacyRoles.some((r) => r.role === "admin")) {
+          return { role: "tenant_admin", tenantIds: [] };
+        }
+        if (legacyRoles.some((r) => r.role === "staff")) {
+          return { role: "staff", tenantIds: [] };
+        }
+      }
+      return { role: null, tenantIds: [] };
+    }
+
+    // Extract tenant IDs
+    const tenantIds = roles
+      .filter((r) => r.tenant_id)
+      .map((r) => r.tenant_id as string);
+
+    // Determine highest role
+    if (roles.some((r) => r.tenant_role === "tenant_admin")) {
+      return { role: "tenant_admin", tenantIds };
+    }
+    if (roles.some((r) => r.tenant_role === "staff")) {
+      return { role: "staff", tenantIds };
+    }
+
+    return { role: null, tenantIds: [] };
   })();
 
   return Promise.race([fetchPromise, timeoutPromise]);
@@ -137,6 +194,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<UserRole>(null);
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [tenantIds, setTenantIds] = useState<string[]>([]);
   const [authState, setAuthState] = useState<AuthState>("init");
   const [error, setError] = useState<string | null>(null);
   const [autoRetryCount, setAutoRetryCount] = useState(0);
@@ -153,12 +212,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return abortControllerRef.current.signal;
   }, []);
 
+  // Set current tenant context
+  const setCurrentTenant = useCallback((newTenantId: string) => {
+    setTenantId(newTenantId);
+    // Persist to localStorage for page refreshes
+    localStorage.setItem('current_tenant_id', newTenantId);
+  }, []);
+
   // Main auth check flow
   const checkAuth = useCallback(async (isAutoRetry = false) => {
     const requestId = generateRequestId();
     const startTime = new Date().toISOString();
     
-    // Initialize diagnostics for this request
     const currentDiagnostics: AuthDiagnostics = {
       sessionFound: false,
       profileFetch: 'pending',
@@ -167,7 +232,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       timestamp: startTime,
     };
 
-    // Prevent too many auto retries
     if (isAutoRetry && autoRetryCount >= MAX_AUTO_RETRIES) {
       currentDiagnostics.timeoutHit = true;
       currentDiagnostics.errorType = 'MAX_RETRIES_EXCEEDED';
@@ -175,7 +239,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthState("error_timeout");
       setError("Auth check failed after retry. Please try again manually.");
       
-      // Log to audit
       logAuthFailure('AUTH_MAX_RETRIES_EXCEEDED', null, {
         requestId,
         retryCount: autoRetryCount,
@@ -186,7 +249,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const signal = cancelPendingOperations();
 
     try {
-      // State: checking_session
       setAuthState("checking_session");
       setError(null);
       setDiagnostics(currentDiagnostics);
@@ -196,19 +258,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (signal.aborted) return;
 
       if (!currentSession?.user) {
-        // No session - unauthenticated
         currentDiagnostics.sessionFound = false;
         currentDiagnostics.profileFetch = 'skipped';
         setDiagnostics(currentDiagnostics);
         setSession(null);
         setUser(null);
         setRole(null);
+        setTenantId(null);
+        setTenantIds([]);
         setAuthState("unauthenticated");
         setAutoRetryCount(0);
         return;
       }
 
-      // Has session - authenticated, now load profile
       currentDiagnostics.sessionFound = true;
       setDiagnostics(currentDiagnostics);
       setSession(currentSession);
@@ -216,13 +278,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthState("loading_profile");
 
       try {
-        const userRole = await fetchUserRoleWithTimeout(currentSession.user.id, signal);
+        const roleInfo = await fetchUserRoleWithTimeout(currentSession.user.id, signal);
 
         if (signal.aborted) return;
 
         currentDiagnostics.profileFetch = 'ok';
         setDiagnostics(currentDiagnostics);
-        setRole(userRole);
+        setRole(roleInfo.role);
+        setTenantIds(roleInfo.tenantIds);
+        
+        // Restore tenant context from localStorage or use first available
+        const savedTenantId = localStorage.getItem('current_tenant_id');
+        if (savedTenantId && roleInfo.tenantIds.includes(savedTenantId)) {
+          setTenantId(savedTenantId);
+        } else if (roleInfo.tenantIds.length > 0) {
+          setTenantId(roleInfo.tenantIds[0]);
+        }
+        
         setAuthState("ready");
         setAutoRetryCount(0);
       } catch (profileError) {
@@ -240,7 +312,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthState("error_profile");
         setError("Failed to load user profile. Please retry.");
         
-        // Log to audit
         logAuthFailure(currentDiagnostics.errorType, currentSession.user.id, {
           requestId,
           error: profileError instanceof Error ? profileError.message : String(profileError),
@@ -257,7 +328,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       currentDiagnostics.profileFetch = 'skipped';
       setDiagnostics(currentDiagnostics);
 
-      // Auto-retry once
       if (!isAutoRetry && autoRetryCount < MAX_AUTO_RETRIES) {
         setAutoRetryCount((c) => c + 1);
         checkAuth(true);
@@ -267,7 +337,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthState("error_timeout");
       setError("Auth check failed. Please retry or sign in again.");
       
-      // Log to audit
       logAuthFailure(currentDiagnostics.errorType, null, {
         requestId,
         error: err instanceof Error ? err.message : String(err),
@@ -280,20 +349,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     checkAuth();
 
-    // Set up auth state listener for future changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, nextSession) => {
-        // Only react to sign in/out events, not token refreshes
+      async (event) => {
         if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
           if (event === "SIGNED_OUT") {
             setSession(null);
             setUser(null);
             setRole(null);
+            setTenantId(null);
+            setTenantIds([]);
             setAuthState("unauthenticated");
             setAutoRetryCount(0);
             setDiagnostics(null);
+            localStorage.removeItem('current_tenant_id');
           } else {
-            // Re-check auth on sign in
             checkAuth();
           }
         }
@@ -306,23 +375,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [checkAuth, cancelPendingOperations]);
 
-  // Retry handler (user-initiated)
   const retry = useCallback(() => {
     setAutoRetryCount(0);
     checkAuth();
   }, [checkAuth]);
 
-  // Go to login handler
   const goToLogin = useCallback(() => {
     setSession(null);
     setUser(null);
     setRole(null);
+    setTenantId(null);
+    setTenantIds([]);
     setAuthState("unauthenticated");
     setAutoRetryCount(0);
     setDiagnostics(null);
+    localStorage.removeItem('current_tenant_id');
   }, []);
 
-  // Hard refresh handler
   const hardRefresh = useCallback(() => {
     window.location.reload();
   }, []);
@@ -330,7 +399,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn: AuthContextValue["signIn"] = async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (!error) {
-      // Trigger re-check
       checkAuth();
     }
     return { error: error ?? null };
@@ -350,9 +418,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setSession(null);
     setRole(null);
+    setTenantId(null);
+    setTenantIds([]);
     setAuthState("unauthenticated");
     setAutoRetryCount(0);
     setDiagnostics(null);
+    localStorage.removeItem('current_tenant_id');
     try {
       await supabase.auth.signOut({ scope: "global" });
     } catch {
@@ -362,16 +433,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const value = useMemo<AuthContextValue>(() => {
-    const isAdmin = role === "admin";
+    const isSuperAdmin = role === "super_admin";
+    const isTenantAdmin = role === "tenant_admin";
     const isStaff = role === "staff";
-    const isAuthenticated = !!user && (isAdmin || isStaff);
+    const isAuthenticated = !!user && (isSuperAdmin || isTenantAdmin || isStaff);
     const loading = authState === "init" || authState === "checking_session" || authState === "loading_profile";
 
     return {
       user,
       session,
       role,
-      isAdmin,
+      tenantId,
+      tenantIds,
+      isSuperAdmin,
+      isTenantAdmin,
       isStaff,
       isAuthenticated,
       loading,
@@ -381,11 +456,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signUp,
       signOut,
+      setCurrentTenant,
       retry,
       goToLogin,
       hardRefresh,
     };
-  }, [user, session, role, authState, error, diagnostics, retry, goToLogin, hardRefresh]);
+  }, [user, session, role, tenantId, tenantIds, authState, error, diagnostics, setCurrentTenant, retry, goToLogin, hardRefresh]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
