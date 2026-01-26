@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions, type Permission } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
-import AuthErrorScreen from './AuthErrorScreen';
+import AuthErrorScreen, { type AuthDiagnostics } from './AuthErrorScreen';
 import AuthLoadingScreen from './AuthLoadingScreen';
 import ForbiddenScreen from './ForbiddenScreen';
 
@@ -38,7 +38,8 @@ export default function AdminRouteGuard({
     retry, 
     goToLogin, 
     hardRefresh,
-    isAuthenticated 
+    isAuthenticated,
+    diagnostics
   } = useAuth();
   const permissions = usePermissions();
   const navigate = useNavigate();
@@ -172,12 +173,26 @@ export default function AdminRouteGuard({
         onRetry={retry}
         onGoToLogin={handleGoToLogin}
         onHardRefresh={hardRefresh}
+        diagnostics={diagnostics ?? undefined}
       />
     );
   }
 
   // Handle profile check error
   if (profileCheckError) {
+    // Create diagnostics for profile check error
+    const profileDiagnostics = diagnostics ? {
+      ...diagnostics,
+      errorType: 'PROFILE_CHECK_FAILED',
+    } : {
+      sessionFound: true,
+      profileFetch: 'failed' as const,
+      timeoutHit: profileCheckError.includes('timed out'),
+      requestId: `profile_${Date.now().toString(36)}`,
+      errorType: 'PROFILE_CHECK_FAILED',
+      timestamp: new Date().toISOString(),
+    };
+    
     return (
       <AuthErrorScreen
         message={profileCheckError}
@@ -187,6 +202,7 @@ export default function AdminRouteGuard({
         }}
         onGoToLogin={handleGoToLogin}
         onHardRefresh={hardRefresh}
+        diagnostics={profileDiagnostics}
       />
     );
   }

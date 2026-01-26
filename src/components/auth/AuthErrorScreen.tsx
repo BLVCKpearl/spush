@@ -1,12 +1,24 @@
-import { AlertTriangle, RefreshCw, LogIn, RotateCcw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, LogIn, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useState } from 'react';
+
+export interface AuthDiagnostics {
+  sessionFound: boolean;
+  profileFetch: 'ok' | 'failed' | 'pending' | 'skipped';
+  timeoutHit: boolean;
+  requestId: string;
+  errorType?: string;
+  timestamp: string;
+}
 
 interface AuthErrorScreenProps {
   message: string;
   onRetry: () => void;
   onGoToLogin: () => void;
   onHardRefresh: () => void;
+  diagnostics?: AuthDiagnostics;
 }
 
 export default function AuthErrorScreen({
@@ -14,7 +26,10 @@ export default function AuthErrorScreen({
   onRetry,
   onGoToLogin,
   onHardRefresh,
+  diagnostics,
 }: AuthErrorScreenProps) {
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
@@ -40,6 +55,60 @@ export default function AuthErrorScreen({
             <RotateCcw className="h-4 w-4 mr-2" />
             Hard Refresh
           </Button>
+
+          {diagnostics && (
+            <Collapsible open={showDiagnostics} onOpenChange={setShowDiagnostics}>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-full mt-4 text-muted-foreground">
+                  {showDiagnostics ? (
+                    <ChevronUp className="h-4 w-4 mr-2" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 mr-2" />
+                  )}
+                  Auth Diagnostics
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="mt-2 p-3 bg-muted rounded-md text-xs font-mono space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">sessionFound:</span>
+                    <span className={diagnostics.sessionFound ? 'text-green-600' : 'text-destructive'}>
+                      {diagnostics.sessionFound ? 'true' : 'false'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">profileFetch:</span>
+                    <span className={
+                      diagnostics.profileFetch === 'ok' ? 'text-green-600' : 
+                      diagnostics.profileFetch === 'failed' ? 'text-destructive' : 'text-yellow-600'
+                    }>
+                      {diagnostics.profileFetch}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">timeoutHit:</span>
+                    <span className={diagnostics.timeoutHit ? 'text-destructive' : 'text-green-600'}>
+                      {diagnostics.timeoutHit ? 'yes' : 'no'}
+                    </span>
+                  </div>
+                  {diagnostics.errorType && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">errorType:</span>
+                      <span className="text-destructive">{diagnostics.errorType}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between pt-2 border-t border-border">
+                    <span className="text-muted-foreground">requestId:</span>
+                    <span className="text-foreground">{diagnostics.requestId}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">timestamp:</span>
+                    <span className="text-foreground">{diagnostics.timestamp}</span>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
         </CardContent>
       </Card>
     </div>
