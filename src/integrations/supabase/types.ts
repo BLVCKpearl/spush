@@ -22,6 +22,7 @@ export type Database = {
           id: string
           metadata: Json | null
           target_user_id: string | null
+          tenant_id: string | null
         }
         Insert: {
           action: string
@@ -30,6 +31,7 @@ export type Database = {
           id?: string
           metadata?: Json | null
           target_user_id?: string | null
+          tenant_id?: string | null
         }
         Update: {
           action?: string
@@ -38,8 +40,17 @@ export type Database = {
           id?: string
           metadata?: Json | null
           target_user_id?: string | null
+          tenant_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       bank_details: {
         Row: {
@@ -528,6 +539,33 @@ export type Database = {
           },
         ]
       }
+      super_admins: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tables: {
         Row: {
           active: boolean
@@ -568,21 +606,35 @@ export type Database = {
           created_at: string
           id: string
           role: Database["public"]["Enums"]["app_role"]
+          tenant_id: string | null
+          tenant_role: Database["public"]["Enums"]["tenant_role"] | null
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
           role: Database["public"]["Enums"]["app_role"]
+          tenant_id?: string | null
+          tenant_role?: Database["public"]["Enums"]["tenant_role"] | null
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          tenant_id?: string | null
+          tenant_role?: Database["public"]["Enums"]["tenant_role"] | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       venue_settings: {
         Row: {
@@ -679,6 +731,10 @@ export type Database = {
         Returns: boolean
       }
       count_active_admins: { Args: never; Returns: number }
+      count_active_tenant_admins: {
+        Args: { _tenant_id: string }
+        Returns: number
+      }
       expire_pending_orders: { Args: never; Returns: number }
       generate_order_reference: { Args: never; Returns: string }
       generate_qr_token: { Args: never; Returns: string }
@@ -686,6 +742,7 @@ export type Database = {
         Args: { p_venue_id: string }
         Returns: number
       }
+      get_user_tenant_ids: { Args: never; Returns: string[] }
       has_payment_confirmation: {
         Args: { p_order_id: string }
         Returns: boolean
@@ -697,9 +754,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      has_tenant_access: { Args: { _tenant_id: string }; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_admin_or_staff: { Args: never; Returns: boolean }
+      is_any_tenant_admin: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
+      is_super_admin: { Args: never; Returns: boolean }
+      is_tenant_admin: { Args: { _tenant_id: string }; Returns: boolean }
+      is_tenant_staff: { Args: { _tenant_id: string }; Returns: boolean }
       record_order_rate_limit: {
         Args: { p_table_id: string }
         Returns: undefined
@@ -731,6 +793,7 @@ export type Database = {
         | "cash_on_delivery"
         | "expired"
       payment_method: "bank_transfer" | "cash"
+      tenant_role: "tenant_admin" | "staff"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -871,6 +934,7 @@ export const Constants = {
         "expired",
       ],
       payment_method: ["bank_transfer", "cash"],
+      tenant_role: ["tenant_admin", "staff"],
     },
   },
 } as const
