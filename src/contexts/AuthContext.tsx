@@ -40,57 +40,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
     let initialLoadDone = false;
+    
+    // Safety timeout to force loading to resolve after 3 seconds max
+    const safetyTimeout = setTimeout(() => {
+      if (isMounted && !initialLoadDone) {
+        console.warn('[Auth] Safety timeout triggered - forcing loading=false');
+        setLoading(false);
+        initialLoadDone = true;
+      }
+    }, 3000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, nextSession) => {
-        if (!isMounted) return;
-        
-        setSession(nextSession);
-        setUser(nextSession?.user ?? null);
+        try {
+          if (!isMounted) return;
+          if (initialLoadDone) return; // Prevent duplicate processing
+          
+          setSession(nextSession);
+          setUser(nextSession?.user ?? null);
 
-        if (nextSession?.user) {
-          try {
-            const nextRole = await fetchUserRole(nextSession.user.id);
-            if (isMounted) setRole(nextRole);
-          } catch {
-            if (isMounted) setRole(null);
+          if (nextSession?.user) {
+            try {
+              const nextRole = await fetchUserRole(nextSession.user.id);
+              if (isMounted) setRole(nextRole);
+            } catch {
+              if (isMounted) setRole(null);
+            }
+          } else {
+            setRole(null);
           }
-        } else {
-          setRole(null);
-        }
 
-        if (isMounted) setLoading(false);
-        initialLoadDone = true;
+          if (isMounted) setLoading(false);
+          initialLoadDone = true;
+        } catch (error) {
+          console.error('[Auth] Error in auth state change handler:', error);
+          // Still mark as done and stop loading even if there's an error
+          if (isMounted) {
+            setLoading(false);
+            initialLoadDone = true;
+          }
+        }
       }
     );
 
-    // Only use getSession as fallback if onAuthStateChange hasn't fired yet
-    const timeout = setTimeout(async () => {
-      if (initialLoadDone || !isMounted) return;
-      
-      try {
-        const { data: { session: existing } } = await supabase.auth.getSession();
-        if (!isMounted || initialLoadDone) return;
-        
-        setSession(existing);
-        setUser(existing?.user ?? null);
-
-        if (existing?.user) {
-          const existingRole = await fetchUserRole(existing.user.id);
-          if (isMounted) setRole(existingRole);
-        } else {
-          setRole(null);
-        }
-      } catch {
-        // Ignore errors - auth state change will handle it
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    }, 100);
-
     return () => {
       isMounted = false;
-      clearTimeout(timeout);
+      clearTimeout(safetyTimeout);
       subscription.unsubscribe();
     };
   }, []);
