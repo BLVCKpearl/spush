@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -23,16 +23,38 @@ export default function ChangeOwnPasswordDialog({
   open,
   onOpenChange,
 }: ChangeOwnPasswordDialogProps) {
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const mountedRef = useRef(true);
 
   const { toast } = useToast();
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // If the dialog is closed externally, make sure we don't keep the UI in a loading state.
+  useEffect(() => {
+    if (!open) {
+      setIsSubmitting(false);
+    }
+  }, [open]);
+
+  const resetForm = () => {
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowPassword(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isSubmitting) return;
 
     if (newPassword.length < 6) {
       toast({
@@ -53,7 +75,6 @@ export default function ChangeOwnPasswordDialog({
     }
 
     setIsSubmitting(true);
-
     try {
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
@@ -65,7 +86,7 @@ export default function ChangeOwnPasswordDialog({
           description: error.message || 'An error occurred',
           variant: 'destructive',
         });
-        setIsSubmitting(false);
+        if (mountedRef.current) setIsSubmitting(false);
         return;
       }
 
@@ -75,31 +96,34 @@ export default function ChangeOwnPasswordDialog({
       });
       
       // Reset state and close
-      setNewPassword('');
-      setConfirmPassword('');
-      setShowPassword(false);
-      setIsSubmitting(false);
-      onOpenChange(false);
+      if (mountedRef.current) {
+        resetForm();
+        setIsSubmitting(false);
+        onOpenChange(false);
+      }
     } catch (error) {
       toast({
         title: 'Failed to update password',
         description: error instanceof Error ? error.message : 'An error occurred',
         variant: 'destructive',
       });
-      setIsSubmitting(false);
+      if (mountedRef.current) setIsSubmitting(false);
     }
   };
 
-  const handleClose = () => {
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setShowPassword(false);
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      onOpenChange(true);
+      return;
+    }
+
+    setIsSubmitting(false);
+    resetForm();
     onOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -154,7 +178,7 @@ export default function ChangeOwnPasswordDialog({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleClose}>
+            <Button type="button" variant="outline" onClick={() => handleDialogOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>

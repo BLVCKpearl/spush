@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { CartProvider } from "@/contexts/CartContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
@@ -48,6 +48,8 @@ const App = () => (
               <Route path="/track" element={<TrackOrderPage />} />
               <Route path="/track/:reference" element={<TrackOrderPage />} />
               <Route path="/admin/login" element={<AdminLoginPage />} />
+              <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
+              <Route path="/admin/" element={<Navigate to="/admin/login" replace />} />
               <Route path="/admin/orders" element={<AdminOrdersPage />} />
               <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
               <Route path="/admin/menu" element={<AdminMenuPage />} />
