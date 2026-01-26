@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import type { AuthDiagnostics } from "@/components/auth/AuthErrorScreen";
 
 export type UserRole = "admin" | "staff" | null;
 
@@ -25,6 +26,7 @@ export type AuthContextValue = {
   loading: boolean;
   authState: AuthState;
   error: string | null;
+  diagnostics: AuthDiagnostics | null;
   signIn: (email: string, password: string) => Promise<{ error: unknown | null }>;
   signUp: (email: string, password: string) => Promise<{ error: unknown | null }>;
   signOut: () => Promise<{ error: unknown | null }>;
@@ -39,6 +41,33 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const SESSION_TIMEOUT_MS = 4000;
 const PROFILE_TIMEOUT_MS = 4000;
 const MAX_AUTO_RETRIES = 1;
+
+// Generate a unique request ID for debugging
+function generateRequestId(): string {
+  return `auth_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
+}
+
+// Log auth failure to audit_logs (best effort, don't block on failure)
+async function logAuthFailure(
+  action: string,
+  userId: string | null,
+  metadata: Record<string, unknown>
+): Promise<void> {
+  try {
+    await supabase.from("admin_audit_logs").insert({
+      action,
+      actor_user_id: userId || "00000000-0000-0000-0000-000000000000",
+      metadata: {
+        ...metadata,
+        client_timestamp: new Date().toISOString(),
+        user_agent: navigator.userAgent,
+      },
+    });
+  } catch (err) {
+    // Silently fail - don't block auth flow for audit logging
+    console.warn("Failed to log auth failure:", err);
+  }
+}
 
 // Helper to fetch role with timeout
 async function fetchUserRoleWithTimeout(
@@ -96,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>("init");
   const [error, setError] = useState<string | null>(null);
   const [autoRetryCount, setAutoRetryCount] = useState(0);
+  const [diagnostics, setDiagnostics] = useState<AuthDiagnostics | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -110,10 +140,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Main auth check flow
   const checkAuth = useCallback(async (isAutoRetry = false) => {
+    const requestId = generateRequestId();
+    const startTime = new Date().toISOString();
+    
+    // Initialize diagnostics for this request
+    const currentDiagnostics: AuthDiagnostics = {
+      sessionFound: false,
+      profileFetch: 'pending',
+      timeoutHit: false,
+      requestId,
+      timestamp: startTime,
+    };
+
     // Prevent too many auto retries
     if (isAutoRetry && autoRetryCount >= MAX_AUTO_RETRIES) {
+      currentDiagnostics.timeoutHit = true;
+      currentDiagnostics.errorType = 'MAX_RETRIES_EXCEEDED';
+      setDiagnostics(currentDiagnostics);
       setAuthState("error_timeout");
       setError("Auth check failed after retry. Please try again manually.");
+      
+      // Log to audit
+      logAuthFailure('AUTH_MAX_RETRIES_EXCEEDED', null, {
+        requestId,
+        retryCount: autoRetryCount,
+      });
       return;
     }
 
@@ -123,6 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // State: checking_session
       setAuthState("checking_session");
       setError(null);
+      setDiagnostics(currentDiagnostics);
 
       const currentSession = await getSessionWithTimeout(signal);
 
@@ -130,6 +182,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!currentSession?.user) {
         // No session - unauthenticated
+        currentDiagnostics.sessionFound = false;
+        currentDiagnostics.profileFetch = 'skipped';
+        setDiagnostics(currentDiagnostics);
         setSession(null);
         setUser(null);
         setRole(null);
@@ -139,6 +194,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Has session - authenticated, now load profile
+      currentDiagnostics.sessionFound = true;
+      setDiagnostics(currentDiagnostics);
       setSession(currentSession);
       setUser(currentSession.user);
       setAuthState("loading_profile");
@@ -148,6 +205,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (signal.aborted) return;
 
+        currentDiagnostics.profileFetch = 'ok';
+        setDiagnostics(currentDiagnostics);
         setRole(userRole);
         setAuthState("ready");
         setAutoRetryCount(0);
@@ -155,14 +214,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (signal.aborted) return;
 
         console.error("Profile fetch error:", profileError);
+        
+        const isTimeout = profileError instanceof Error && profileError.message.includes('timeout');
+        currentDiagnostics.profileFetch = 'failed';
+        currentDiagnostics.timeoutHit = isTimeout;
+        currentDiagnostics.errorType = isTimeout ? 'AUTH_PROFILE_FETCH_TIMEOUT' : 'AUTH_PROFILE_FETCH_FAILED';
+        setDiagnostics(currentDiagnostics);
+        
         setRole(null);
         setAuthState("error_profile");
         setError("Failed to load user profile. Please retry.");
+        
+        // Log to audit
+        logAuthFailure(currentDiagnostics.errorType, currentSession.user.id, {
+          requestId,
+          error: profileError instanceof Error ? profileError.message : String(profileError),
+        });
       }
     } catch (err) {
       if (signal.aborted) return;
 
       console.error("Auth check error:", err);
+      
+      const isTimeout = err instanceof Error && err.message.includes('timeout');
+      currentDiagnostics.timeoutHit = isTimeout;
+      currentDiagnostics.errorType = isTimeout ? 'AUTH_SESSION_TIMEOUT' : 'AUTH_SESSION_CHECK_FAILED';
+      currentDiagnostics.profileFetch = 'skipped';
+      setDiagnostics(currentDiagnostics);
 
       // Auto-retry once
       if (!isAutoRetry && autoRetryCount < MAX_AUTO_RETRIES) {
@@ -173,6 +251,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setAuthState("error_timeout");
       setError("Auth check failed. Please retry or sign in again.");
+      
+      // Log to audit
+      logAuthFailure(currentDiagnostics.errorType, null, {
+        requestId,
+        error: err instanceof Error ? err.message : String(err),
+        retryCount: autoRetryCount,
+      });
     }
   }, [cancelPendingOperations, autoRetryCount]);
 
@@ -191,6 +276,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setRole(null);
             setAuthState("unauthenticated");
             setAutoRetryCount(0);
+            setDiagnostics(null);
           } else {
             // Re-check auth on sign in
             checkAuth();
@@ -218,6 +304,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRole(null);
     setAuthState("unauthenticated");
     setAutoRetryCount(0);
+    setDiagnostics(null);
   }, []);
 
   // Hard refresh handler
@@ -250,6 +337,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRole(null);
     setAuthState("unauthenticated");
     setAutoRetryCount(0);
+    setDiagnostics(null);
     try {
       await supabase.auth.signOut({ scope: "global" });
     } catch {
@@ -274,6 +362,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       authState,
       error,
+      diagnostics,
       signIn,
       signUp,
       signOut,
@@ -281,7 +370,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       goToLogin,
       hardRefresh,
     };
-  }, [user, session, role, authState, error, retry, goToLogin, hardRefresh]);
+  }, [user, session, role, authState, error, diagnostics, retry, goToLogin, hardRefresh]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
