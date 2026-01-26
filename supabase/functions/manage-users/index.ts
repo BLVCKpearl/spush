@@ -38,12 +38,19 @@ interface SetPasswordRequest {
   password: string;
 }
 
+interface ServiceRolePasswordRequest {
+  action: "service_set_password";
+  userId: string;
+  password: string;
+}
+
 type UserManagementRequest =
   | CreateUserRequest
   | UpdateUserRequest
   | ResetPasswordRequest
   | DeactivateUserRequest
-  | SetPasswordRequest;
+  | SetPasswordRequest
+  | ServiceRolePasswordRequest;
 
 // Generate a secure random password
 function generateSecurePassword(): string {
@@ -67,7 +74,46 @@ Deno.serve(async (req) => {
       throw new Error("Missing Supabase configuration");
     }
 
-    // Verify the requesting user is an admin
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const body: UserManagementRequest = await req.json();
+
+    // Service role password update - bypasses user auth (for system use only)
+    if (body.action === "service_set_password") {
+      const { userId, password } = body as ServiceRolePasswordRequest;
+
+      if (!userId || !password) {
+        return new Response(
+          JSON.stringify({ error: "User ID and password are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (password.length < 6) {
+        return new Response(
+          JSON.stringify({ error: "Password must be at least 6 characters" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        password,
+      });
+
+      if (updateError) {
+        console.error("Error setting password:", updateError);
+        return new Response(
+          JSON.stringify({ error: "Failed to set password" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message: "Password updated successfully." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // All other actions require user authentication
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
@@ -76,7 +122,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     const token = authHeader.replace("Bearer ", "");
     
     // Use getClaims for proper JWT validation with signing-keys
@@ -104,8 +149,6 @@ Deno.serve(async (req) => {
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const body: UserManagementRequest = await req.json();
 
     // Helper to log audit action
     async function logAudit(
