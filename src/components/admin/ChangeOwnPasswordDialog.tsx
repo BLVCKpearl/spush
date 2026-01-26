@@ -75,10 +75,14 @@ export default function ChangeOwnPasswordDialog({
     }
 
     setIsSubmitting(true);
+    
     try {
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
       });
+
+      // Always reset submitting state first, before any other state changes
+      setIsSubmitting(false);
 
       if (error) {
         toast({
@@ -86,7 +90,6 @@ export default function ChangeOwnPasswordDialog({
           description: error.message || 'An error occurred',
           variant: 'destructive',
         });
-        if (mountedRef.current) setIsSubmitting(false);
         return;
       }
 
@@ -95,19 +98,21 @@ export default function ChangeOwnPasswordDialog({
         description: 'Your password has been changed successfully.',
       });
       
-      // Reset state and close
-      if (mountedRef.current) {
-        resetForm();
-        setIsSubmitting(false);
-        onOpenChange(false);
-      }
+      // Reset form and close after a small delay to ensure state updates complete
+      resetForm();
+      // Use setTimeout to allow React to process state updates before closing
+      setTimeout(() => {
+        if (mountedRef.current) {
+          onOpenChange(false);
+        }
+      }, 100);
     } catch (error) {
+      setIsSubmitting(false);
       toast({
         title: 'Failed to update password',
         description: error instanceof Error ? error.message : 'An error occurred',
         variant: 'destructive',
       });
-      if (mountedRef.current) setIsSubmitting(false);
     }
   };
 

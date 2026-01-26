@@ -78,7 +78,12 @@ export default function AdminLoginPage() {
     );
   }
 
-  // If user is logged in but has no role, show access denied
+  const handleSignOut = async () => {
+    await signIn('', '').catch(() => {}); // Clear any partial state
+    window.location.reload(); // Force clean state
+  };
+
+  // If user is logged in but has no role, show access denied with option to sign out
   if (user && !isAdmin && !isStaff) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -89,13 +94,20 @@ export default function AdminLoginPage() {
               Your account does not have admin or staff privileges.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 Please contact an administrator to request access.
               </AlertDescription>
             </Alert>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={handleSignOut}
+            >
+              Sign out and try again
+            </Button>
           </CardContent>
         </Card>
       </div>
