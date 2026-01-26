@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { getAppEnvironment, isNonProduction } from '@/lib/environment';
 
-type TestStatus = 'pending' | 'running' | 'passed' | 'failed' | 'manual';
+type TestStatus = 'pending' | 'running' | 'passed' | 'failed' | 'awaiting_manual';
 
 interface TestCase {
   id: string;
@@ -33,7 +33,7 @@ interface TestCase {
 }
 
 const initialTests: TestCase[] = [
-  // Authorization tests
+  // Authorization tests (automated)
   {
     id: 'staff-blocked-users',
     name: 'Role mismatch: staff blocked from /admin/users',
@@ -50,14 +50,14 @@ const initialTests: TestCase[] = [
     isManual: false,
     status: 'pending',
   },
-  // Timeout/Error handling tests (manual with guidance)
+  // Timeout/Error handling tests (manual verification required)
   {
     id: 'expired-session',
     name: 'Expired session → redirect to /admin/login within 4 seconds',
     description: 'Expired/invalid session should redirect to login within 4 seconds',
     category: 'timeout',
     isManual: true,
-    status: 'manual',
+    status: 'awaiting_manual',
   },
   {
     id: 'offline-error',
@@ -65,7 +65,7 @@ const initialTests: TestCase[] = [
     description: 'Turn off internet during dashboard load - should show error screen within 4 seconds (no spinner loop)',
     category: 'error-handling',
     isManual: true,
-    status: 'manual',
+    status: 'awaiting_manual',
   },
   {
     id: 'profile-500-error',
@@ -73,16 +73,16 @@ const initialTests: TestCase[] = [
     description: 'A 500 error during profile fetch should show error screen (not loading forever)',
     category: 'error-handling',
     isManual: true,
-    status: 'manual',
+    status: 'awaiting_manual',
   },
-  // Redirect tests
+  // Redirect tests (manual)
   {
     id: 'force-reset-redirect',
     name: '"Force reset" user gets redirected to /admin/force-reset',
     description: 'User with must_change_password=true should be redirected to force reset page',
     category: 'redirect',
     isManual: true,
-    status: 'manual',
+    status: 'awaiting_manual',
   },
 ];
 
@@ -94,7 +94,7 @@ function StatusIcon({ status }: { status: TestStatus }) {
       return <XCircle className="h-5 w-5 text-destructive" />;
     case 'running':
       return <RefreshCw className="h-5 w-5 text-primary animate-spin" />;
-    case 'manual':
+    case 'awaiting_manual':
       return <AlertTriangle className="h-5 w-5 text-accent-foreground" />;
     default:
       return <Clock className="h-5 w-5 text-muted-foreground" />;
@@ -107,7 +107,7 @@ function StatusBadge({ status }: { status: TestStatus }) {
     running: { variant: 'default', label: 'Running' },
     passed: { variant: 'outline', label: 'Passed' },
     failed: { variant: 'destructive', label: 'Failed' },
-    manual: { variant: 'secondary', label: 'Manual' },
+    awaiting_manual: { variant: 'secondary', label: 'Awaiting Manual Test' },
   };
 
   const { variant, label } = variants[status];
