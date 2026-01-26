@@ -1,15 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
+import React from 'react';
+import { NavLink } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { 
   LayoutDashboard, 
   ClipboardList, 
@@ -17,14 +8,8 @@ import {
   CreditCard,
   BarChart3,
   Users,
-  LogOut,
-  Loader2,
   QrCode,
-  KeyRound,
-  ChevronDown
 } from 'lucide-react';
-import { toast } from 'sonner';
-import ChangeOwnPasswordDialog from './ChangeOwnPasswordDialog';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -35,59 +20,18 @@ interface NavItem {
   to: string;
   label: string;
   icon: React.ElementType;
-  adminOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
   { to: '/admin/orders', label: 'Orders', icon: ClipboardList },
-  { to: '/admin/tables', label: 'Tables', icon: QrCode, adminOnly: true },
-  { to: '/admin/analytics', label: 'Analytics', icon: BarChart3, adminOnly: true },
-  { to: '/admin/menu', label: 'Menu', icon: UtensilsCrossed, adminOnly: true },
-  { to: '/admin/bank-details', label: 'Bank Details', icon: CreditCard, adminOnly: true },
-  { to: '/admin/users', label: 'Users', icon: Users, adminOnly: true },
+  { to: '/admin/tables', label: 'Tables', icon: QrCode },
+  { to: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
+  { to: '/admin/menu', label: 'Menu', icon: UtensilsCrossed },
+  { to: '/admin/bank-details', label: 'Bank Details', icon: CreditCard },
+  { to: '/admin/users', label: 'Users', icon: Users },
 ];
 
 export default function AdminLayout({ children, title }: AdminLayoutProps) {
-  const auth = useAuth();
-  const navigate = useNavigate();
-  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
-
-  const { user, isAdmin, isStaff, loading, signOut } = auth;
-  const isAuthorized = !!user && (isAdmin || isStaff);
-
-  useEffect(() => {
-    if (!loading && !isAuthorized) {
-      navigate('/admin/login');
-    }
-  }, [loading, isAuthorized, navigate]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!isAuthorized) {
-    return null;
-  }
-
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-    } catch (e) {
-      // Ignore errors - we'll navigate anyway
-    }
-    toast.success('Signed out successfully');
-    navigate('/admin/login');
-  };
-
-  // Filter nav items based on role
-  const visibleNavItems = navItems.filter(item => 
-    !item.adminOnly || isAdmin
-  );
-
   return (
     <div className="min-h-screen bg-background">
       {/* Top Navigation */}
@@ -96,36 +40,15 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
           <div className="flex items-center gap-4">
             <LayoutDashboard className="h-6 w-6" />
             <h1 className="font-semibold hidden sm:block">Restaurant Admin</h1>
-            <Badge variant={isAdmin ? "default" : "secondary"} className="text-xs">
-              {isAdmin ? 'Admin' : 'Staff'}
+            <Badge variant="default" className="text-xs">
+              Admin
             </Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-1">
-                  <span className="text-sm hidden md:block">{user.email}</span>
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setChangePasswordOpen(true)}>
-                  <KeyRound className="h-4 w-4 mr-2" />
-                  Change Password
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut}>
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </div>
         
         {/* Tab Navigation */}
         <nav className="flex border-t overflow-x-auto">
-          {visibleNavItems.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -149,12 +72,6 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
         <h2 className="text-xl font-semibold mb-4">{title}</h2>
         {children}
       </main>
-
-      {/* Change Password Dialog */}
-      <ChangeOwnPasswordDialog
-        open={changePasswordOpen}
-        onOpenChange={setChangePasswordOpen}
-      />
     </div>
   );
 }
