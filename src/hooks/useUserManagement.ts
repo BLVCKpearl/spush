@@ -162,6 +162,42 @@ export function useDeactivateUser() {
   });
 }
 
+export function useDeleteUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      try {
+        const { data, error } = await supabase.functions.invoke('manage-users', {
+          body: {
+            action: 'delete',
+            userId,
+          },
+        });
+
+        clearTimeout(timeoutId);
+
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+
+        return data;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw new Error('Request timed out. Please try again.');
+        }
+        throw err;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['managed-users'] });
+    },
+  });
+}
+
 export function useAuditLogs() {
   return useQuery({
     queryKey: ['audit-logs'],
