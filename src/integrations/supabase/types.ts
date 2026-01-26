@@ -349,6 +349,33 @@ export type Database = {
         }
         Relationships: []
       }
+      password_reset_tokens: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          token_hash: string
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          token_hash: string
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          token_hash?: string
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       payment_claims: {
         Row: {
           bank_name: string | null
@@ -467,6 +494,7 @@ export type Database = {
           must_change_password: boolean
           updated_at: string
           user_id: string
+          venue_id: string | null
         }
         Insert: {
           created_at?: string
@@ -477,6 +505,7 @@ export type Database = {
           must_change_password?: boolean
           updated_at?: string
           user_id: string
+          venue_id?: string | null
         }
         Update: {
           created_at?: string
@@ -487,8 +516,17 @@ export type Database = {
           must_change_password?: boolean
           updated_at?: string
           user_id?: string
+          venue_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tables: {
         Row: {
