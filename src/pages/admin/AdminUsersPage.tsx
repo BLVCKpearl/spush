@@ -12,6 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useUsers, useUpdateUser, type ManagedUser } from '@/hooks/useUserManagement';
+import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -27,6 +28,7 @@ import CreateUserDialog from '@/components/admin/users/CreateUserDialog';
 import EditUserDialog from '@/components/admin/users/EditUserDialog';
 import ResetPasswordDialog from '@/components/admin/users/ResetPasswordDialog';
 import ModifyPasswordDialog from '@/components/admin/users/ModifyPasswordDialog';
+import DeleteUserDialog from '@/components/admin/users/DeleteUserDialog';
 import UserActionsDropdown from '@/components/admin/users/UserActionsDropdown';
 
 export default function AdminUsersPage() {
@@ -34,11 +36,18 @@ export default function AdminUsersPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [modifyPasswordDialogOpen, setModifyPasswordDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
 
   const { data: users, isLoading, error } = useUsers();
+  const { user: currentUser, isAdmin } = useAuth();
   const updateUser = useUpdateUser();
   const { toast } = useToast();
+
+  // Count active admins for last-admin protection
+  const activeAdminCount = users?.filter(
+    (u) => u.role === 'admin' && u.is_active
+  ).length ?? 0;
 
   const handleEdit = (user: ManagedUser) => {
     setSelectedUser(user);
@@ -53,6 +62,11 @@ export default function AdminUsersPage() {
   const handleModifyPassword = (user: ManagedUser) => {
     setSelectedUser(user);
     setModifyPasswordDialogOpen(true);
+  };
+
+  const handleDelete = (user: ManagedUser) => {
+    setSelectedUser(user);
+    setDeleteDialogOpen(true);
   };
 
   const handleToggleActive = async (user: ManagedUser) => {
@@ -185,10 +199,14 @@ export default function AdminUsersPage() {
                         <TableCell>
                           <UserActionsDropdown
                             user={user}
+                            currentUserId={currentUser?.id ?? ''}
+                            isAdmin={isAdmin}
+                            activeAdminCount={activeAdminCount}
                             onEdit={() => handleEdit(user)}
                             onResetPassword={() => handleResetPassword(user)}
                             onModifyPassword={() => handleModifyPassword(user)}
                             onToggleActive={() => handleToggleActive(user)}
+                            onDelete={() => handleDelete(user)}
                           />
                         </TableCell>
                       </TableRow>
@@ -216,6 +234,11 @@ export default function AdminUsersPage() {
       <ModifyPasswordDialog
         open={modifyPasswordDialogOpen}
         onOpenChange={setModifyPasswordDialogOpen}
+        user={selectedUser}
+      />
+      <DeleteUserDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
         user={selectedUser}
       />
     </AdminLayout>

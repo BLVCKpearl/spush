@@ -6,24 +6,36 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, Pencil, KeyRound, Lock, UserX, UserCheck } from 'lucide-react';
+import { MoreHorizontal, Pencil, KeyRound, Lock, UserX, UserCheck, Trash2 } from 'lucide-react';
 import type { ManagedUser } from '@/hooks/useUserManagement';
 
 interface UserActionsDropdownProps {
   user: ManagedUser;
+  currentUserId: string;
+  isAdmin: boolean;
+  activeAdminCount: number;
   onEdit: () => void;
   onResetPassword: () => void;
   onModifyPassword: () => void;
   onToggleActive: () => void;
+  onDelete: () => void;
 }
 
 export default function UserActionsDropdown({
   user,
+  currentUserId,
+  isAdmin,
+  activeAdminCount,
   onEdit,
   onResetPassword,
   onModifyPassword,
   onToggleActive,
+  onDelete,
 }: UserActionsDropdownProps) {
+  const isSelf = user.user_id === currentUserId;
+  const isLastAdmin = user.role === 'admin' && activeAdminCount <= 1;
+  const canDelete = isAdmin && !isSelf && !isLastAdmin;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -62,6 +74,18 @@ export default function UserActionsDropdown({
             </>
           )}
         </DropdownMenuItem>
+        {canDelete && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={onDelete}
+              className="text-destructive focus:text-destructive focus:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete User
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

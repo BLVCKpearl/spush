@@ -32,6 +32,11 @@ interface DeactivateUserRequest {
   userId: string;
 }
 
+interface DeleteUserRequest {
+  action: "delete";
+  userId: string;
+}
+
 interface SetPasswordRequest {
   action: "set_password";
   userId: string;
@@ -50,7 +55,8 @@ type UserManagementRequest =
   | ResetPasswordRequest
   | DeactivateUserRequest
   | SetPasswordRequest
-  | ServiceRolePasswordRequest;
+  | ServiceRolePasswordRequest
+  | DeleteUserRequest;
 
 // Generate a secure random password
 function generateSecurePassword(): string {
@@ -486,6 +492,91 @@ Deno.serve(async (req) => {
             success: true,
             message: "Password updated successfully.",
           }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      case "delete": {
+        const { userId } = body as DeleteUserRequest;
+
+        if (!userId) {
+          return new Response(
+            JSON.stringify({ error: "User ID is required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Prevent self-deletion
+        if (userId === actorUserId) {
+          return new Response(
+            JSON.stringify({ error: "Cannot delete your own account" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Check if target user exists
+        const { data: targetProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("user_id, email, display_name")
+          .eq("user_id", userId)
+          .single();
+
+        if (!targetProfile) {
+          return new Response(
+            JSON.stringify({ error: "User not found" }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Check last-admin protection
+        const { data: targetRoles } = await supabaseAdmin
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", userId);
+
+        const isTargetAdmin = targetRoles?.some((r) => r.role === "admin");
+
+        if (isTargetAdmin) {
+          const { data: adminCount } = await supabaseAdmin.rpc("count_active_admins");
+
+          if (adminCount <= 1) {
+            return new Response(
+              JSON.stringify({ error: "Cannot delete the last remaining admin" }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+
+        // Store email snapshot for audit before deletion
+        const emailSnapshot = targetProfile.email;
+        const displayNameSnapshot = targetProfile.display_name;
+
+        // Delete user role first (FK constraint)
+        await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+
+        // Delete profile (FK constraint)
+        await supabaseAdmin.from("profiles").delete().eq("user_id", userId);
+
+        // Delete auth user (this also invalidates all sessions)
+        const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+
+        if (deleteError) {
+          console.error("Error deleting auth user:", deleteError);
+          return new Response(
+            JSON.stringify({ error: "Failed to delete user from auth system" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Log audit with email snapshot for historical reference
+        await logAudit("USER_DELETED", userId, { 
+          email_snapshot: emailSnapshot,
+          display_name_snapshot: displayNameSnapshot,
+          was_admin: isTargetAdmin 
+        });
+
+        return new Response(
+          JSON.stringify({ success: true, message: "User permanently deleted" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
