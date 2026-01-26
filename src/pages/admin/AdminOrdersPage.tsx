@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import AdminLayout from '@/components/admin/AdminLayout';
+import { useAuth } from '@/contexts/AuthContext';
 import { useOrders, useUpdateOrderStatus } from '@/hooks/useOrders';
 import OrderStatusTabs from '@/components/admin/OrderStatusTabs';
 import { toast } from 'sonner';
 import type { OrderStatus } from '@/types/database';
 
 export default function AdminOrdersPage() {
+  const { tenantId } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('pending_transfer');
-  const { data: orders, isLoading } = useOrders();
+  
+  // Scope orders to current tenant
+  const { data: orders, isLoading } = useOrders(tenantId);
   const updateStatus = useUpdateOrderStatus();
 
   const handleStatusUpdate = async (orderId: string, newStatus: string) => {

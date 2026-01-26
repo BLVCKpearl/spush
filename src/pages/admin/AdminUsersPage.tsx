@@ -12,7 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useUsers, useUpdateUser, type ManagedUser } from '@/hooks/useUserManagement';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -32,6 +32,9 @@ import DeleteUserDialog from '@/components/admin/users/DeleteUserDialog';
 import UserActionsDropdown from '@/components/admin/users/UserActionsDropdown';
 
 export default function AdminUsersPage() {
+  const { tenantId, isSuperAdmin, isTenantAdmin, user: currentUser } = useAuth();
+  const isAdmin = isTenantAdmin || isSuperAdmin;
+  
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
@@ -39,15 +42,14 @@ export default function AdminUsersPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
 
-  const { data: users, isLoading, error } = useUsers();
-  const { user: currentUser, isTenantAdmin, isSuperAdmin } = useAuth();
-  const isAdmin = isTenantAdmin || isSuperAdmin;
+  // Scope users query to current tenant
+  const { data: users, isLoading, error } = useUsers(tenantId);
   const updateUser = useUpdateUser();
   const { toast } = useToast();
 
   // Count active admins for last-admin protection
   const activeAdminCount = users?.filter(
-    (u) => u.role === 'admin' && u.is_active
+    (u) => (u.role === 'admin' || u.tenant_role === 'tenant_admin') && u.is_active
   ).length ?? 0;
 
   const handleEdit = (user: ManagedUser) => {
@@ -91,8 +93,9 @@ export default function AdminUsersPage() {
     }
   };
 
-  const getRoleBadge = (role: string | null) => {
-    if (role === 'admin') {
+  const getRoleBadge = (user: ManagedUser) => {
+    const role = user.tenant_role || user.role;
+    if (role === 'tenant_admin' || role === 'admin') {
       return (
         <Badge className="gap-1 bg-primary/10 text-primary hover:bg-primary/20">
           <Shield className="h-3 w-3" />
@@ -128,6 +131,19 @@ export default function AdminUsersPage() {
     );
   };
 
+  // Show message if no tenant is selected
+  if (!tenantId && !isSuperAdmin) {
+    return (
+      <AdminLayout title="User Management" adminOnly>
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            No tenant context available.
+          </CardContent>
+        </Card>
+      </AdminLayout>
+    );
+  }
+
   return (
     <AdminLayout title="User Management" adminOnly>
       <div className="space-y-6">
@@ -142,7 +158,7 @@ export default function AdminUsersPage() {
               Create and manage admin and staff accounts.
             </p>
           </div>
-          <Button onClick={() => setCreateDialogOpen(true)}>
+          <Button onClick={() => setCreateDialogOpen(true)} disabled={!tenantId}>
             <UserPlus className="h-4 w-4 mr-2" />
             Create User
           </Button>
@@ -190,7 +206,7 @@ export default function AdminUsersPage() {
                         <TableCell className="text-muted-foreground">
                           {user.email}
                         </TableCell>
-                        <TableCell>{getRoleBadge(user.role)}</TableCell>
+                        <TableCell>{getRoleBadge(user)}</TableCell>
                         <TableCell>{getStatusBadge(user.is_active)}</TableCell>
                         <TableCell className="text-muted-foreground text-sm">
                           {formatDistanceToNow(new Date(user.created_at), {
@@ -221,7 +237,11 @@ export default function AdminUsersPage() {
       </div>
 
       {/* Dialogs */}
-      <CreateUserDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
+      <CreateUserDialog 
+        open={createDialogOpen} 
+        onOpenChange={setCreateDialogOpen}
+        tenantId={tenantId}
+      />
       <EditUserDialog
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}

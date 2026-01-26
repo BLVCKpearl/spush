@@ -50,6 +50,7 @@ interface CreateTableDialogProps {
   onCreateBulk: (data: { venue_id: string; labels: string[] }) => Promise<void>;
   isLoading: boolean;
   existingTables?: TableWithVenue[];
+  defaultVenueId?: string;
 }
 
 // Helper to extract number suffix from a label given a prefix
@@ -82,23 +83,24 @@ export function CreateTableDialog({
   onCreateBulk,
   isLoading,
   existingTables = [],
+  defaultVenueId,
 }: CreateTableDialogProps) {
   const [tab, setTab] = useState<'single' | 'bulk-number' | 'bulk-list'>('single');
   const { data: venues, isLoading: venuesLoading } = useVenues();
 
   const singleForm = useForm({
     resolver: zodResolver(singleSchema),
-    defaultValues: { venue_id: '', label: '' },
+    defaultValues: { venue_id: defaultVenueId || '', label: '' },
   });
 
   const bulkNumberForm = useForm({
     resolver: zodResolver(bulkNumberSchema),
-    defaultValues: { venue_id: '', prefix: 'Table ', start: 1, count: 10 },
+    defaultValues: { venue_id: defaultVenueId || '', prefix: 'Table ', start: 1, count: 10 },
   });
 
   const bulkListForm = useForm({
     resolver: zodResolver(bulkListSchema),
-    defaultValues: { venue_id: '', labels: '' },
+    defaultValues: { venue_id: defaultVenueId || '', labels: '' },
   });
 
   // Watch venue and prefix to auto-adjust start number

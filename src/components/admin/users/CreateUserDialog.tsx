@@ -25,11 +25,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 interface CreateUserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  tenantId?: string | null;
 }
 
 export default function CreateUserDialog({
   open,
   onOpenChange,
+  tenantId,
 }: CreateUserDialogProps) {
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
@@ -63,7 +65,7 @@ export default function CreateUserDialog({
     }
 
     try {
-      const result = await createUser.mutateAsync({ email, fullName, role, password });
+      const result = await createUser.mutateAsync({ email, fullName, role, password, tenantId: tenantId || undefined });
       setTempPassword(result.password || password);
       toast({
         title: 'User created',

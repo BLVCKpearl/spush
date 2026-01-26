@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { useTables, TableWithVenue } from '@/hooks/useTables';
 import { useVenues } from '@/hooks/useVenues';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,7 +58,12 @@ import { generateQRCodeBlob, getTableQRUrl, downloadBlob } from '@/lib/qrcode';
 import { toast } from 'sonner';
 
 export default function AdminTablesPage() {
-  const [selectedVenueId, setSelectedVenueId] = useState<string>('all');
+  const { tenantId, isSuperAdmin } = useAuth();
+  
+  // For super admins, allow selecting a venue; for tenant users, use their tenant
+  const [selectedVenueId, setSelectedVenueId] = useState<string>('');
+  const effectiveTenantId = isSuperAdmin ? (selectedVenueId || null) : tenantId;
+  
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [qrDialogTable, setQrDialogTable] = useState<TableWithVenue | null>(null);
   const [editTable, setEditTable] = useState<TableWithVenue | null>(null);
@@ -67,9 +73,7 @@ export default function AdminTablesPage() {
 
   const { data: venues, isLoading: venuesLoading } = useVenues();
   
-  // Fetch ALL tables (unfiltered) for duplicate detection in create dialog
-  const { tables: allTables } = useTables();
-  
+  // Fetch tables scoped to the effective tenant
   const {
     tables,
     isLoading: tablesLoading,
@@ -78,7 +82,7 @@ export default function AdminTablesPage() {
     updateTable,
     regenerateToken,
     deleteTable: deleteTableMutation,
-  } = useTables(selectedVenueId === 'all' ? undefined : selectedVenueId);
+  } = useTables(effectiveTenantId);
 
   const handleBulkDownload = async () => {
     if (tables.length === 0) {
@@ -140,19 +144,20 @@ export default function AdminTablesPage() {
         {/* Header Actions */}
         <div className="flex flex-wrap gap-4 items-center justify-between">
           <div className="flex gap-2 items-center">
-            <Select value={selectedVenueId} onValueChange={setSelectedVenueId}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by venue" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Venues</SelectItem>
-                {venues?.map((venue) => (
-                  <SelectItem key={venue.id} value={venue.id}>
-                    {venue.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {isSuperAdmin && (
+              <Select value={selectedVenueId} onValueChange={setSelectedVenueId}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Select venue" />
+                </SelectTrigger>
+                <SelectContent>
+                  {venues?.map((venue) => (
+                    <SelectItem key={venue.id} value={venue.id}>
+                      {venue.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className="flex gap-2">
@@ -168,144 +173,157 @@ export default function AdminTablesPage() {
               )}
               Download All QRs
             </Button>
-            <Button onClick={() => setCreateDialogOpen(true)}>
+            <Button onClick={() => setCreateDialogOpen(true)} disabled={!effectiveTenantId}>
               <Plus className="h-4 w-4 mr-2" />
               Create Tables
             </Button>
           </div>
         </div>
 
-        {/* Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Tenant required message for super admins */}
+        {isSuperAdmin && !effectiveTenantId && (
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Tables
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{tables.length}</div>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              Select a venue to manage its tables.
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Active
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">
-                {tables.filter((t) => t.active).length}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Inactive
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-muted-foreground">
-                {tables.filter((t) => !t.active).length}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        )}
 
-        {/* Tables List */}
-        <Card>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : tables.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <QrCode className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="font-medium mb-1">No tables yet</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Create tables to generate QR codes for ordering
-                </p>
-                <Button onClick={() => setCreateDialogOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Tables
-                </Button>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Label</TableHead>
-                    <TableHead>Venue</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tables.map((table) => (
-                    <TableRow key={table.id}>
-                      <TableCell className="font-medium">{table.label}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {table.venues.name}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={table.active}
-                            onCheckedChange={(checked) => {
-                              updateTable.mutate({ id: table.id, active: checked });
-                            }}
-                            disabled={updateTable.isPending}
-                          />
-                          <span className="text-sm text-muted-foreground">
-                            {table.active ? 'Active' : 'Inactive'}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(table.created_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setQrDialogTable(table)}>
-                              <QrCode className="h-4 w-4 mr-2" />
-                              View QR Code
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setEditTable(table)}>
-                              <Pencil className="h-4 w-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => setRegenerateTable(table)}>
-                              <RefreshCw className="h-4 w-4 mr-2" />
-                              Regenerate QR Token
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => setDeleteTable(table)}
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+        {effectiveTenantId && (
+          <>
+            {/* Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Total Tables
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{tables.length}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Active
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-primary">
+                    {tables.filter((t) => t.active).length}
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Inactive
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-muted-foreground">
+                    {tables.filter((t) => !t.active).length}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tables List */}
+            <Card>
+              <CardContent className="p-0">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : tables.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <QrCode className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="font-medium mb-1">No tables yet</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Create tables to generate QR codes for ordering
+                    </p>
+                    <Button onClick={() => setCreateDialogOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Tables
+                    </Button>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Label</TableHead>
+                        <TableHead>Venue</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {tables.map((table) => (
+                        <TableRow key={table.id}>
+                          <TableCell className="font-medium">{table.label}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {table.venues.name}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={table.active}
+                                onCheckedChange={(checked) => {
+                                  updateTable.mutate({ id: table.id, active: checked });
+                                }}
+                                disabled={updateTable.isPending}
+                              />
+                              <span className="text-sm text-muted-foreground">
+                                {table.active ? 'Active' : 'Inactive'}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {new Date(table.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => setQrDialogTable(table)}>
+                                  <QrCode className="h-4 w-4 mr-2" />
+                                  View QR Code
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setEditTable(table)}>
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setRegenerateTable(table)}>
+                                  <RefreshCw className="h-4 w-4 mr-2" />
+                                  Regenerate QR Token
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={() => setDeleteTable(table)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Dialogs */}
@@ -315,7 +333,8 @@ export default function AdminTablesPage() {
         onCreateSingle={handleCreateSingle}
         onCreateBulk={handleCreateBulk}
         isLoading={createTable.isPending || createBulkTables.isPending}
-        existingTables={allTables}
+        existingTables={tables}
+        defaultVenueId={effectiveTenantId || undefined}
       />
 
       <TableQRDialog

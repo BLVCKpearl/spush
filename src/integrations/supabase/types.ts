@@ -96,20 +96,31 @@ export type Database = {
           display_order: number
           id: string
           name: string
+          venue_id: string | null
         }
         Insert: {
           created_at?: string
           display_order?: number
           id?: string
           name: string
+          venue_id?: string | null
         }
         Update: {
           created_at?: string
           display_order?: number
           id?: string
           name?: string
+          venue_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "categories_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       menu_items: {
         Row: {

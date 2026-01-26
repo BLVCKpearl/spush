@@ -12,7 +12,6 @@ export function useBankDetails(venueId?: string | null) {
     queryFn: async () => {
       if (!venueId) return null;
       
-      // Use edge function to fetch bank details (guests can't read bank_details table directly)
       const { data, error } = await supabase.functions.invoke('get-bank-details', {
         body: { venueId },
       });
@@ -24,6 +23,31 @@ export function useBankDetails(venueId?: string | null) {
   });
 }
 
+/**
+ * Tenant-scoped bank details for admin usage
+ */
+export function useTenantBankDetails(tenantId: string | null) {
+  return useQuery({
+    queryKey: ['bank-details', 'tenant', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      
+      const { data, error } = await supabase
+        .from('bank_details')
+        .select('*')
+        .eq('venue_id', tenantId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data as BankDetails[];
+    },
+    enabled: !!tenantId,
+  });
+}
+
+/**
+ * All bank details - only for super admins
+ */
 export function useAllBankDetails() {
   return useQuery({
     queryKey: ['all-bank-details'],
@@ -44,11 +68,14 @@ export function useCreateBankDetails() {
 
   return useMutation({
     mutationFn: async (details: Omit<BankDetails, 'id' | 'created_at'>) => {
-      // First, deactivate all existing bank details
-      await supabase
-        .from('bank_details')
-        .update({ is_active: false })
-        .eq('is_active', true);
+      // First, deactivate all existing bank details for this venue
+      if (details.venue_id) {
+        await supabase
+          .from('bank_details')
+          .update({ is_active: false })
+          .eq('venue_id', details.venue_id)
+          .eq('is_active', true);
+      }
 
       const { data, error } = await supabase
         .from('bank_details')

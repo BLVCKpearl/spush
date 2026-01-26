@@ -1,43 +1,32 @@
-import { useState } from 'react';
 import AdminLayout from '@/components/admin/AdminLayout';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useTodayAnalytics, useVenues } from '@/hooks/useAnalytics';
+import { useTodayAnalytics } from '@/hooks/useAnalytics';
 import { formatNaira } from '@/lib/currency';
 import { TrendingUp, ShoppingCart, DollarSign } from 'lucide-react';
 
 export default function AdminAnalyticsPage() {
-  const [selectedVenueId, setSelectedVenueId] = useState<string>('all');
+  const { tenantId } = useAuth();
   
-  const { data: venues, isLoading: venuesLoading } = useVenues();
-  const { data: analytics, isLoading: analyticsLoading } = useTodayAnalytics(
-    selectedVenueId === 'all' ? undefined : selectedVenueId
-  );
+  // Scope analytics to current tenant
+  const { data: analytics, isLoading } = useTodayAnalytics(tenantId);
 
-  const isLoading = venuesLoading || analyticsLoading;
+  if (!tenantId) {
+    return (
+      <AdminLayout title="Analytics" requiredPermission="canAccessAnalytics">
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            No tenant context available.
+          </CardContent>
+        </Card>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout title="Analytics" requiredPermission="canAccessAnalytics">
       <div className="space-y-6">
-        {/* Venue Filter */}
-        <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-muted-foreground">Filter by venue:</span>
-          <Select value={selectedVenueId} onValueChange={setSelectedVenueId}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="All venues" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All venues</SelectItem>
-              {venues?.map((venue) => (
-                <SelectItem key={venue.id} value={venue.id}>
-                  {venue.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         {/* Today's Stats Header */}
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-medium">Today's Performance</h3>

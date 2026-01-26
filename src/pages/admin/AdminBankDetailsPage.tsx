@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import AdminLayout from '@/components/admin/AdminLayout';
-import { useAllBankDetails, useCreateBankDetails, useUpdateBankDetails } from '@/hooks/useBankDetails';
+import { useAuth } from '@/contexts/AuthContext';
+import { useTenantBankDetails, useCreateBankDetails, useUpdateBankDetails } from '@/hooks/useBankDetails';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +21,10 @@ import { toast } from 'sonner';
 import type { BankDetails } from '@/types/database';
 
 export default function AdminBankDetailsPage() {
-  const { data: bankDetails, isLoading } = useAllBankDetails();
+  const { tenantId } = useAuth();
+  
+  // Scope to current tenant
+  const { data: bankDetails, isLoading } = useTenantBankDetails(tenantId);
   const createBankDetails = useCreateBankDetails();
   const updateBankDetails = useUpdateBankDetails();
   
@@ -33,7 +37,7 @@ export default function AdminBankDetailsPage() {
         await updateBankDetails.mutateAsync({ id: editing.id, ...data });
         toast.success('Bank details updated');
       } else {
-        await createBankDetails.mutateAsync(data);
+        await createBankDetails.mutateAsync({ ...data, venue_id: tenantId });
         toast.success('Bank details added');
       }
       setDialogOpen(false);
@@ -45,7 +49,6 @@ export default function AdminBankDetailsPage() {
 
   const handleSetActive = async (details: BankDetails) => {
     try {
-      // Update existing record to be active
       await updateBankDetails.mutateAsync({
         id: details.id,
         is_active: true,
@@ -62,6 +65,18 @@ export default function AdminBankDetailsPage() {
         <div className="flex justify-center py-8">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
+      </AdminLayout>
+    );
+  }
+
+  if (!tenantId) {
+    return (
+      <AdminLayout title="Bank Details" requiredPermission="canManageBankDetails">
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            No tenant context available.
+          </CardContent>
+        </Card>
       </AdminLayout>
     );
   }
@@ -126,6 +141,7 @@ export default function AdminBankDetailsPage() {
                   <DialogContent>
                     <BankDetailsForm
                       details={editing}
+                      venueId={tenantId}
                       onSubmit={handleSubmit}
                       isLoading={createBankDetails.isPending || updateBankDetails.isPending}
                     />
@@ -151,6 +167,7 @@ export default function AdminBankDetailsPage() {
             <DialogContent>
               <BankDetailsForm
                 details={editing}
+                venueId={tenantId}
                 onSubmit={handleSubmit}
                 isLoading={createBankDetails.isPending || updateBankDetails.isPending}
               />
@@ -173,10 +190,12 @@ export default function AdminBankDetailsPage() {
 
 function BankDetailsForm({
   details,
+  venueId,
   onSubmit,
   isLoading,
 }: {
   details: BankDetails | null;
+  venueId: string | null;
   onSubmit: (data: Omit<BankDetails, 'id' | 'created_at'>) => void;
   isLoading: boolean;
 }) {
@@ -189,7 +208,7 @@ function BankDetailsForm({
     e.preventDefault();
     if (bankName.trim() && accountName.trim() && accountNumber.trim()) {
       onSubmit({
-        venue_id: details?.venue_id || null,
+        venue_id: venueId,
         bank_name: bankName.trim(),
         account_name: accountName.trim(),
         account_number: accountNumber.trim(),
