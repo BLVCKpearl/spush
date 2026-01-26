@@ -35,74 +35,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<UserRole>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true;
-    let initialLoadDone = false;
-
-    // Absolute safety: never let the app stay in a loading state forever even if
-    // auth network calls hang or events never arrive.
-    const hardStop = window.setTimeout(() => {
-      if (!isMounted || initialLoadDone) return;
-      initialLoadDone = true;
-      setLoading(false);
-    }, 3000);
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, nextSession) => {
-        if (!isMounted) return;
-        
-        setSession(nextSession);
-        setUser(nextSession?.user ?? null);
-
-        if (nextSession?.user) {
-          try {
-            const nextRole = await fetchUserRole(nextSession.user.id);
-            if (isMounted) setRole(nextRole);
-          } catch {
-            if (isMounted) setRole(null);
-          }
-        } else {
-          setRole(null);
-        }
-
-        if (isMounted) setLoading(false);
-        initialLoadDone = true;
-      }
-    );
-
-    // Only use getSession as fallback if onAuthStateChange hasn't fired yet
-    const timeout = setTimeout(async () => {
-      if (initialLoadDone || !isMounted) return;
-      
-      try {
-        const { data: { session: existing } } = await supabase.auth.getSession();
-        if (!isMounted || initialLoadDone) return;
-        
-        setSession(existing);
-        setUser(existing?.user ?? null);
-
-        if (existing?.user) {
-          const existingRole = await fetchUserRole(existing.user.id);
-          if (isMounted) setRole(existingRole);
-        } else {
-          setRole(null);
-        }
-      } catch {
-        // Ignore errors - auth state change will handle it
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    }, 100);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeout);
-      clearTimeout(hardStop);
-      subscription.unsubscribe();
-    };
-  }, []);
+  // No auth required - start with loading=false
+  const [loading] = useState(false);
 
   const signIn: AuthContextValue["signIn"] = async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -119,19 +53,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut: AuthContextValue["signOut"] = async () => {
-    // Always clear local state immediately so the UI responds even if the server session is stale.
     setUser(null);
     setSession(null);
     setRole(null);
-
-    try {
-      // If the session is already gone server-side, this may return 403 session_not_found.
-      // That's fine—our client is already logged out.
-      await supabase.auth.signOut({ scope: "global" });
-    } catch {
-      // Ignore
-    }
-
     return { error: null };
   };
 
