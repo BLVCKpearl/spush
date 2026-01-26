@@ -40,7 +40,8 @@ export default function AdminUsersPage() {
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
 
   const { data: users, isLoading, error } = useUsers();
-  const { user: currentUser, isAdmin } = useAuth();
+  const { user: currentUser, isTenantAdmin, isSuperAdmin } = useAuth();
+  const isAdmin = isTenantAdmin || isSuperAdmin;
   const updateUser = useUpdateUser();
   const { toast } = useToast();
 
