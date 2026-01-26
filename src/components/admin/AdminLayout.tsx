@@ -1,8 +1,10 @@
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   ClipboardList, 
   UtensilsCrossed, 
@@ -12,6 +14,7 @@ import {
   QrCode,
   LogOut,
   Loader2,
+  UserCircle,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -33,12 +36,37 @@ const navItems: NavItem[] = [
   { to: '/admin/menu', label: 'Menu', icon: UtensilsCrossed, permission: 'canManageMenu' },
   { to: '/admin/bank-details', label: 'Bank Details', icon: CreditCard, permission: 'canManageBankDetails' },
   { to: '/admin/users', label: 'Users', icon: Users, permission: 'canManageUsers' },
+  { to: '/admin/account', label: 'Account', icon: UserCircle, permission: 'canModifyOwnPassword' },
 ];
 
 export default function AdminLayout({ children, title }: AdminLayoutProps) {
   const { user, role, loading, signOut, isAuthenticated } = useAuth();
   const permissions = usePermissions();
   const navigate = useNavigate();
+  const [mustChangePassword, setMustChangePassword] = useState<boolean | null>(null);
+
+  // Check if user must change password
+  useEffect(() => {
+    async function checkMustChangePassword() {
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('must_change_password')
+        .eq('user_id', user.id)
+        .single();
+
+      if (data?.must_change_password) {
+        navigate('/admin/force-reset');
+      } else {
+        setMustChangePassword(false);
+      }
+    }
+
+    if (!loading && isAuthenticated) {
+      checkMustChangePassword();
+    }
+  }, [user, loading, isAuthenticated, navigate]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -46,7 +74,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
   };
 
   // Show loading state
-  if (loading) {
+  if (loading || (isAuthenticated && mustChangePassword === null)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

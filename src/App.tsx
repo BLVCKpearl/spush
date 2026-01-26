@@ -21,6 +21,8 @@ import AdminBankDetailsPage from "./pages/admin/AdminBankDetailsPage";
 import AdminRolesPage from "./pages/admin/AdminRolesPage";
 import AdminTablesPage from "./pages/admin/AdminTablesPage";
 import AdminUsersPage from "./pages/admin/AdminUsersPage";
+import AdminAccountPage from "./pages/admin/AdminAccountPage";
+import AdminForceResetPage from "./pages/admin/AdminForceResetPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,8 +50,8 @@ const App = () => (
               <Route path="/track" element={<TrackOrderPage />} />
               <Route path="/track/:reference" element={<TrackOrderPage />} />
               <Route path="/admin/login" element={<AdminLoginPage />} />
-              <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
-              <Route path="/admin/" element={<Navigate to="/admin/login" replace />} />
+              <Route path="/admin" element={<Navigate to="/admin/orders" replace />} />
+              <Route path="/admin/" element={<Navigate to="/admin/orders" replace />} />
               <Route path="/admin/orders" element={<AdminOrdersPage />} />
               <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
               <Route path="/admin/menu" element={<AdminMenuPage />} />
@@ -57,6 +59,8 @@ const App = () => (
               <Route path="/admin/roles" element={<AdminRolesPage />} />
               <Route path="/admin/tables" element={<AdminTablesPage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
+              <Route path="/admin/account" element={<AdminAccountPage />} />
+              <Route path="/admin/force-reset" element={<AdminForceResetPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
