@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useRequireAuth } from '@/hooks/useAuth';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -30,7 +29,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Loader2, UserPlus, Trash2, Shield, ShieldCheck } from 'lucide-react';
+import { Loader2, Trash2, Shield, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 type AppRole = 'admin' | 'staff';
@@ -43,7 +42,6 @@ interface UserWithRoles {
 }
 
 export default function AdminRolesPage() {
-  const { loading: authLoading } = useRequireAuth('admin');
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -101,10 +99,8 @@ export default function AdminRolesPage() {
   };
 
   useEffect(() => {
-    if (!authLoading) {
-      fetchUsersWithRoles();
-    }
-  }, [authLoading]);
+    fetchUsersWithRoles();
+  }, []);
 
   const addRole = async (userId: string, role: AppRole) => {
     setActionLoading(`add-${userId}-${role}`);
@@ -168,7 +164,7 @@ export default function AdminRolesPage() {
     return role === 'admin' && totalAdmins === 1 && users.find(u => u.id === userId)?.roles.includes('admin');
   };
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <AdminLayout title="User Roles">
         <div className="flex items-center justify-center py-12">

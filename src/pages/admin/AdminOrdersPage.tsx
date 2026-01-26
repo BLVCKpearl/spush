@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useRequireAuth } from '@/hooks/useAuth';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { useOrders, useUpdateOrderStatus } from '@/hooks/useOrders';
 import OrderStatusTabs from '@/components/admin/OrderStatusTabs';
@@ -7,9 +6,6 @@ import { toast } from 'sonner';
 import type { OrderStatus } from '@/types/database';
 
 export default function AdminOrdersPage() {
-  // Both admin and staff can access this page
-  useRequireAuth('any');
-  
   const [activeTab, setActiveTab] = useState<string>('pending_transfer');
   const { data: orders, isLoading } = useOrders();
   const updateStatus = useUpdateOrderStatus();
