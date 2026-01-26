@@ -7,20 +7,21 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
+import AuthLoadingScreen from '@/components/auth/AuthLoadingScreen';
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn, isAuthenticated, loading } = useAuth();
+  const { signIn, isAuthenticated, authState } = useAuth();
   const navigate = useNavigate();
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (!loading && isAuthenticated) {
+    if (authState === 'ready' && isAuthenticated) {
       navigate('/admin/orders');
     }
-  }, [loading, isAuthenticated, navigate]);
+  }, [authState, isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,12 +47,14 @@ export default function AdminLoginPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+  // Show loading only during initial check, not after
+  if (authState === 'init' || authState === 'checking_session') {
+    return <AuthLoadingScreen authState={authState} />;
+  }
+
+  // If already authenticated and loading profile, show loading
+  if (authState === 'loading_profile') {
+    return <AuthLoadingScreen authState={authState} />;
   }
 
   return (
