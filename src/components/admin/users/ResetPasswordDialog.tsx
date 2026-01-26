@@ -76,11 +76,15 @@ export default function ResetPasswordDialog({
           </AlertDialogTitle>
           <AlertDialogDescription>
             {tempPassword ? (
-              'Password has been reset successfully.'
+              'Password has been reset. The user will be required to set a new password on their next login.'
             ) : (
               <>
                 Are you sure you want to reset the password for{' '}
                 <span className="font-medium">{user.display_name || user.email}</span>?
+                <br />
+                <span className="text-muted-foreground">
+                  They will receive a temporary password and must change it on next login.
+                </span>
               </>
             )}
           </AlertDialogDescription>
@@ -92,8 +96,8 @@ export default function ResetPasswordDialog({
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Share this temporary password securely with the user. They should
-                  change it after logging in.
+                  Share this temporary password securely with the user. They will be
+                  required to set a new password after logging in.
                 </p>
                 <div className="flex items-center gap-2 bg-background p-2 rounded border">
                   <code className="flex-1 text-sm font-mono break-all">
