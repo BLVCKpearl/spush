@@ -4,9 +4,10 @@ import { useCart } from '@/contexts/CartContext';
 import { useTableSession } from '@/hooks/useTableSession';
 import { formatNaira } from '@/lib/currency';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ShoppingBag } from 'lucide-react';
+import { ShoppingBag } from 'lucide-react';
 import { CartItemCard } from '@/components/cart/CartItemCard';
 import { OrderSummary } from '@/components/cart/OrderSummary';
+import GuestHeader from '@/components/layout/GuestHeader';
 
 export default function CartPage() {
   const navigate = useNavigate();
@@ -60,14 +61,13 @@ export default function CartPage() {
   // Empty cart state
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-background p-4">
-        <header className="mb-6">
-          <Button variant="ghost" onClick={handleBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Menu
-          </Button>
-        </header>
-        <div className="text-center py-12">
+      <div className="min-h-screen bg-background">
+        <GuestHeader 
+          title="Your Cart" 
+          showBack 
+          backUrl={currentSession ? `/menu/${currentSession.venueSlug}` : '/'} 
+        />
+        <div className="text-center py-12 px-4">
           <ShoppingBag className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground mb-4">Your cart is empty</p>
           <Button onClick={handleBack}>Browse Menu</Button>
@@ -83,18 +83,13 @@ export default function CartPage() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
-      <header className="sticky top-0 z-10 bg-background border-b px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={handleBack}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-lg font-semibold">Your Cart</h1>
-            <p className="text-sm text-muted-foreground">{displayLocation}</p>
-          </div>
-        </div>
-      </header>
+      {/* Consistent Guest Header */}
+      <GuestHeader 
+        title="Your Cart" 
+        subtitle={displayLocation}
+        showBack 
+        backUrl={currentSession ? `/menu/${currentSession.venueSlug}` : '/'} 
+      />
 
       {/* Cart Items */}
       <main className="p-4 space-y-4">

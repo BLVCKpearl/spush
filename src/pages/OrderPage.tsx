@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { ShoppingCart, Plus, Minus } from 'lucide-react';
+import GuestHeader from '@/components/layout/GuestHeader';
 import type { MenuItem } from '@/types/database';
 
 export default function OrderPage() {
@@ -88,18 +89,16 @@ export default function OrderPage() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
-      <header className="sticky top-0 z-10 bg-background border-b px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold">Menu</h1>
-            <p className="text-sm text-muted-foreground">Table {tableNumber}</p>
-          </div>
+      {/* Consistent Guest Header */}
+      <GuestHeader 
+        title="Menu" 
+        subtitle={`Table ${tableNumber}`}
+        rightContent={
           <Badge variant="secondary" className="text-sm">
             {getTotalItems()} items
           </Badge>
-        </div>
-      </header>
+        }
+      />
 
       {/* Menu Content */}
       <main className="p-4">

@@ -11,6 +11,7 @@ import { ShoppingCart, AlertCircle, Loader2 } from 'lucide-react';
 import { MenuItemCard } from '@/components/menu/MenuItemCard';
 import { MenuSearch } from '@/components/menu/MenuSearch';
 import { CategoryFilter } from '@/components/menu/CategoryFilter';
+import GuestHeader from '@/components/layout/GuestHeader';
 import type { MenuItem } from '@/types/database';
 
 export default function VenueMenuPage() {
@@ -126,11 +127,11 @@ export default function VenueMenuPage() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
-      <header className="sticky top-0 z-10 bg-background border-b px-4 py-3">
-        <div className="flex items-center justify-between mb-3">
+      {/* Consistent Guest Header */}
+      <div className="sticky top-0 z-10 bg-background border-b border-primary/10">
+        <div className="flex items-center justify-between px-4 py-3">
           <div>
-            <h1 className="text-lg font-semibold">{session.venueName}</h1>
+            <h1 className="text-lg font-semibold text-foreground">{session.venueName}</h1>
             <p className="text-sm text-muted-foreground">{session.tableLabel}</p>
           </div>
           <Badge variant="secondary" className="text-sm">
@@ -139,11 +140,13 @@ export default function VenueMenuPage() {
         </div>
         
         {/* Search */}
-        <MenuSearch value={searchQuery} onChange={setSearchQuery} />
+        <div className="px-4 pb-3">
+          <MenuSearch value={searchQuery} onChange={setSearchQuery} />
+        </div>
         
         {/* Category Filter */}
         {categories && categories.length > 0 && (
-          <div className="mt-3">
+          <div className="px-4 pb-3">
             <CategoryFilter
               categories={categories}
               selectedCategoryId={selectedCategoryId}
@@ -151,7 +154,7 @@ export default function VenueMenuPage() {
             />
           </div>
         )}
-      </header>
+      </div>
 
       {/* Menu Content */}
       <main className="p-4 space-y-6">

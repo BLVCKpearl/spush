@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { PaymentClaimDialog } from '@/components/payment/PaymentClaimDialog';
+import GuestHeader from '@/components/layout/GuestHeader';
+import PageTitle from '@/components/layout/PageTitle';
 import {
   CheckCircle2, 
   Clock, 
@@ -103,17 +105,20 @@ export default function OrderConfirmationPage() {
 
   return (
     <div className="min-h-screen bg-background pb-8">
-      {/* Header */}
-      <header className="bg-primary text-primary-foreground px-4 py-6">
-        <div className="text-center">
-          <CheckCircle2 className="h-12 w-12 mx-auto mb-3" />
-          <h1 className="text-xl font-semibold">Order Placed!</h1>
-          <p className="text-primary-foreground/80 mt-1">Table {order.table_number}</p>
-        </div>
-      </header>
+      {/* Consistent Guest Header */}
+      <GuestHeader 
+        title="Order Confirmed" 
+        subtitle={`Table ${order.table_number}`}
+      />
 
-      <main className="p-4 space-y-4 max-w-md mx-auto -mt-4">
-        {/* Order Reference - Prominent */}
+      <main className="p-4 space-y-4 max-w-md mx-auto">
+        {/* Success Banner */}
+        <div className="text-center py-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-3">
+            <CheckCircle2 className="h-8 w-8 text-primary" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground">Order Placed!</h2>
+        </div>
         <Card className="border-2 border-primary">
           <CardContent className="p-4 text-center">
             <p className="text-sm text-muted-foreground mb-1">Order Reference</p>

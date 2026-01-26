@@ -1,21 +1,25 @@
 import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { UtensilsCrossed, QrCode, Search, Settings } from 'lucide-react';
+import GuestHeader from '@/components/layout/GuestHeader';
 
 const Index = () => {
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section */}
-      <header className="bg-primary text-primary-foreground px-4 py-12 text-center">
-        <UtensilsCrossed className="h-12 w-12 mx-auto mb-4" />
-        <h1 className="text-2xl font-bold mb-2">Restaurant Ordering</h1>
-        <p className="text-primary-foreground/80">
-          Scan, Order, Enjoy
-        </p>
-      </header>
+      {/* Clean Header */}
+      <GuestHeader 
+        title="Restaurant Ordering" 
+        subtitle="Scan, Order, Enjoy"
+      />
 
-      <main className="p-4 max-w-md mx-auto space-y-4 -mt-6">
+      <main className="p-4 max-w-md mx-auto space-y-4">
+        {/* Hero Icon */}
+        <div className="text-center py-6">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-accent mb-4">
+            <UtensilsCrossed className="h-8 w-8 text-primary" />
+          </div>
+        </div>
+
         {/* Scan QR Card */}
         <Card>
           <CardContent className="p-6 text-center">
