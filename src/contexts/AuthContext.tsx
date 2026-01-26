@@ -39,11 +39,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    let initialLoadDone = false;
+
+    // Safety timeout - never let auth loading hang forever
+    const safetyTimeout = window.setTimeout(() => {
+      if (isMounted && !initialLoadDone) {
+        initialLoadDone = true;
+        setLoading(false);
+      }
+    }, 3000);
 
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, nextSession) => {
         if (!isMounted) return;
+        initialLoadDone = true;
 
         setSession(nextSession);
         setUser(nextSession?.user ?? null);
@@ -66,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Initial session check
     supabase.auth.getSession().then(async ({ data: { session: existing } }) => {
       if (!isMounted) return;
+      initialLoadDone = true;
 
       setSession(existing);
       setUser(existing?.user ?? null);
@@ -81,11 +92,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (isMounted) setLoading(false);
     }).catch(() => {
-      if (isMounted) setLoading(false);
+      if (isMounted) {
+        initialLoadDone = true;
+        setLoading(false);
+      }
     });
 
     return () => {
       isMounted = false;
+      clearTimeout(safetyTimeout);
       subscription.unsubscribe();
     };
   }, []);
