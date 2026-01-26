@@ -23,6 +23,7 @@ import AdminTablesPage from "./pages/admin/AdminTablesPage";
 import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminAccountPage from "./pages/admin/AdminAccountPage";
 import AdminForceResetPage from "./pages/admin/AdminForceResetPage";
+import AdminAuthTestPage from "./pages/admin/AdminAuthTestPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -61,6 +62,7 @@ const App = () => (
               <Route path="/admin/users" element={<AdminUsersPage />} />
               <Route path="/admin/account" element={<AdminAccountPage />} />
               <Route path="/admin/force-reset" element={<AdminForceResetPage />} />
+              <Route path="/admin/auth-test" element={<AdminAuthTestPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
