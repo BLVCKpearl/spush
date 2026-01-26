@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import AdminRouteGuard from '@/components/auth/AdminRouteGuard';
+import PageTitle from '@/components/layout/PageTitle';
 import type { Permission } from '@/hooks/usePermissions';
 import { 
   ClipboardList, 
@@ -65,11 +66,11 @@ export default function AdminLayout({
   return (
     <AdminRouteGuard requiredPermission={requiredPermission} adminOnly={adminOnly}>
       <div className="min-h-screen bg-background">
-        {/* Top Navigation */}
-        <header className="sticky top-0 z-50 border-b bg-background">
+        {/* Top Navigation - White bg, subtle olive divider, no shadows */}
+        <header className="sticky top-0 z-50 bg-background border-b border-primary/10">
           <div className="flex h-14 items-center justify-between px-4">
             <div className="flex items-center gap-4">
-              <h1 className="font-semibold hidden sm:block">Restaurant Admin</h1>
+              <h1 className="font-semibold text-foreground hidden sm:block">Restaurant Admin</h1>
               <Badge variant={role === 'admin' ? 'default' : 'secondary'} className="text-xs capitalize">
                 {role}
               </Badge>
@@ -85,8 +86,8 @@ export default function AdminLayout({
             </div>
           </div>
           
-          {/* Tab Navigation */}
-          <nav className="flex border-t overflow-x-auto">
+          {/* Tab Navigation - Olive active indicator */}
+          <nav className="flex border-t border-primary/5 overflow-x-auto">
             {visibleNavItems.map((item) => (
               <NavLink
                 key={item.to}
@@ -94,8 +95,8 @@ export default function AdminLayout({
                 className={({ isActive }) =>
                   `flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     isActive
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                      ? 'border-primary text-primary bg-accent/30'
+                      : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/20'
                   }`
                 }
               >
@@ -106,9 +107,9 @@ export default function AdminLayout({
           </nav>
         </header>
 
-        {/* Page Content */}
+        {/* Page Content with consistent PageTitle */}
         <main className="p-4">
-          <h2 className="text-xl font-semibold mb-4">{title}</h2>
+          <PageTitle title={title} />
           {children}
         </main>
       </div>

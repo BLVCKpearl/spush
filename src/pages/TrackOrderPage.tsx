@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import GuestHeader from '@/components/layout/GuestHeader';
 import {
   CheckCircle2, 
   Clock, 
@@ -146,8 +147,16 @@ export default function TrackOrderPage() {
   const showSearch = !reference;
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-md mx-auto space-y-4">
+    <div className="min-h-screen bg-background">
+      {/* Consistent Guest Header */}
+      <GuestHeader 
+        title="Track Order" 
+        subtitle={order?.order_reference}
+        showBack={!!reference}
+        backUrl="/"
+      />
+
+      <div className="p-4 max-w-md mx-auto space-y-4">
         {/* Search - only show when not accessed via direct URL */}
         {showSearch && (
           <Card>

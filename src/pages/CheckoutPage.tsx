@@ -11,8 +11,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, CreditCard, Banknote, Loader2, ShoppingBag } from 'lucide-react';
+import { CreditCard, Banknote, Loader2, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
+import GuestHeader from '@/components/layout/GuestHeader';
 import type { PaymentMethod } from '@/types/database';
 
 export default function CheckoutPage() {
@@ -89,18 +90,12 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
-      <header className="sticky top-0 z-10 bg-background border-b px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={handleBack}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-lg font-semibold">Checkout</h1>
-            <p className="text-sm text-muted-foreground">{displayLocation}</p>
-          </div>
-        </div>
-      </header>
+      {/* Consistent Guest Header */}
+      <GuestHeader 
+        title="Checkout" 
+        subtitle={displayLocation}
+        showBack 
+      />
 
       <main className="p-4 space-y-4">
         {/* Customer Name */}
