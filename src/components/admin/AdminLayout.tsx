@@ -1,14 +1,17 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { 
-  LayoutDashboard, 
   ClipboardList, 
   UtensilsCrossed, 
   CreditCard,
   BarChart3,
   Users,
   QrCode,
+  LogOut,
+  Loader2,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -20,35 +23,71 @@ interface NavItem {
   to: string;
   label: string;
   icon: React.ElementType;
+  permission: keyof ReturnType<typeof usePermissions>;
 }
 
 const navItems: NavItem[] = [
-  { to: '/admin/orders', label: 'Orders', icon: ClipboardList },
-  { to: '/admin/tables', label: 'Tables', icon: QrCode },
-  { to: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
-  { to: '/admin/menu', label: 'Menu', icon: UtensilsCrossed },
-  { to: '/admin/bank-details', label: 'Bank Details', icon: CreditCard },
-  { to: '/admin/users', label: 'Users', icon: Users },
+  { to: '/admin/orders', label: 'Orders', icon: ClipboardList, permission: 'canAccessOrders' },
+  { to: '/admin/tables', label: 'Tables', icon: QrCode, permission: 'canManageTables' },
+  { to: '/admin/analytics', label: 'Analytics', icon: BarChart3, permission: 'canAccessAnalytics' },
+  { to: '/admin/menu', label: 'Menu', icon: UtensilsCrossed, permission: 'canManageMenu' },
+  { to: '/admin/bank-details', label: 'Bank Details', icon: CreditCard, permission: 'canManageBankDetails' },
+  { to: '/admin/users', label: 'Users', icon: Users, permission: 'canManageUsers' },
 ];
 
 export default function AdminLayout({ children, title }: AdminLayoutProps) {
+  const { user, role, loading, signOut, isAuthenticated } = useAuth();
+  const permissions = usePermissions();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/admin/login');
+  };
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) {
+    navigate('/admin/login');
+    return null;
+  }
+
+  // Filter nav items based on permissions
+  const visibleNavItems = navItems.filter(item => permissions[item.permission]);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Top Navigation */}
       <header className="sticky top-0 z-50 border-b bg-background">
         <div className="flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-4">
-            <LayoutDashboard className="h-6 w-6" />
             <h1 className="font-semibold hidden sm:block">Restaurant Admin</h1>
-            <Badge variant="default" className="text-xs">
-              Admin
+            <Badge variant={role === 'admin' ? 'default' : 'secondary'} className="text-xs capitalize">
+              {role}
             </Badge>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground hidden sm:block">
+              {user?.email}
+            </span>
+            <Button variant="outline" size="sm" onClick={handleSignOut}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </Button>
           </div>
         </div>
         
         {/* Tab Navigation */}
         <nav className="flex border-t overflow-x-auto">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

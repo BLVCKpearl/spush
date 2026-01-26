@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -35,8 +35,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<UserRole>(null);
-  // No auth required - start with loading=false
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, nextSession) => {
+        if (!isMounted) return;
+
+        setSession(nextSession);
+        setUser(nextSession?.user ?? null);
+
+        if (nextSession?.user) {
+          try {
+            const nextRole = await fetchUserRole(nextSession.user.id);
+            if (isMounted) setRole(nextRole);
+          } catch {
+            if (isMounted) setRole(null);
+          }
+        } else {
+          setRole(null);
+        }
+
+        if (isMounted) setLoading(false);
+      }
+    );
+
+    // Initial session check
+    supabase.auth.getSession().then(async ({ data: { session: existing } }) => {
+      if (!isMounted) return;
+
+      setSession(existing);
+      setUser(existing?.user ?? null);
+
+      if (existing?.user) {
+        try {
+          const existingRole = await fetchUserRole(existing.user.id);
+          if (isMounted) setRole(existingRole);
+        } catch {
+          if (isMounted) setRole(null);
+        }
+      }
+
+      if (isMounted) setLoading(false);
+    }).catch(() => {
+      if (isMounted) setLoading(false);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const signIn: AuthContextValue["signIn"] = async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -56,6 +108,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setSession(null);
     setRole(null);
+    try {
+      await supabase.auth.signOut({ scope: "global" });
+    } catch {
+      // Ignore
+    }
     return { error: null };
   };
 
@@ -81,10 +138,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function useAuthContext() {
+export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) {
     throw new Error("useAuth must be used within <AuthProvider>");
   }
   return ctx;
 }
+
+// Backwards compatibility alias
+export const useAuthContext = useAuth;
