@@ -58,7 +58,7 @@ export default function AdminBankDetailsPage() {
 
   if (isLoading) {
     return (
-      <AdminLayout title="Bank Details">
+      <AdminLayout title="Bank Details" requiredPermission="canManageBankDetails">
         <div className="flex justify-center py-8">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -69,7 +69,7 @@ export default function AdminBankDetailsPage() {
   const activeDetails = bankDetails?.find((d) => d.is_active);
 
   return (
-    <AdminLayout title="Bank Details">
+    <AdminLayout title="Bank Details" requiredPermission="canManageBankDetails">
       <div className="space-y-6">
         {/* Current Active Bank */}
         <section>

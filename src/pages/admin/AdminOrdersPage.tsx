@@ -20,7 +20,7 @@ export default function AdminOrdersPage() {
   };
 
   return (
-    <AdminLayout title="Order Queue">
+    <AdminLayout title="Order Queue" requiredPermission="canAccessOrders">
       <OrderStatusTabs
         orders={orders || []}
         isLoading={isLoading}

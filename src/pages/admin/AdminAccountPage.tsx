@@ -56,7 +56,7 @@ export default function AdminAccountPage() {
   };
 
   return (
-    <AdminLayout title="Account Settings">
+    <AdminLayout title="Account Settings" requiredPermission="canModifyOwnPassword">
       <div className="max-w-md">
         <Card>
           <CardHeader>

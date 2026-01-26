@@ -135,7 +135,7 @@ export default function AdminTablesPage() {
   const isLoading = tablesLoading || venuesLoading;
 
   return (
-    <AdminLayout title="Table Management">
+    <AdminLayout title="Table Management" requiredPermission="canManageTables">
       <div className="space-y-4">
         {/* Header Actions */}
         <div className="flex flex-wrap gap-4 items-center justify-between">

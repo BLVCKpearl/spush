@@ -187,7 +187,7 @@ export default function AdminMenuPage() {
 
   if (categoriesLoading || menuLoading) {
     return (
-      <AdminLayout title="Menu Management">
+      <AdminLayout title="Menu Management" requiredPermission="canManageMenu">
         <div className="flex justify-center py-8">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -205,7 +205,7 @@ export default function AdminMenuPage() {
     })) || [];
 
   return (
-    <AdminLayout title="Menu Management">
+    <AdminLayout title="Menu Management" requiredPermission="canManageMenu">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="manage" className="gap-1.5">

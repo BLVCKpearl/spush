@@ -18,7 +18,7 @@ export default function AdminAnalyticsPage() {
   const isLoading = venuesLoading || analyticsLoading;
 
   return (
-    <AdminLayout title="Analytics">
+    <AdminLayout title="Analytics" requiredPermission="canAccessAnalytics">
       <div className="space-y-6">
         {/* Venue Filter */}
         <div className="flex items-center gap-4">
