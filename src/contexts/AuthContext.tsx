@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, useCallback, u
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { AuthDiagnostics } from "@/components/auth/AuthErrorScreen";
+import { isNonProduction } from "@/lib/environment";
 
 export type UserRole = "admin" | "staff" | null;
 
@@ -69,11 +70,25 @@ async function logAuthFailure(
   }
 }
 
+// Check if profile failure simulation is active (non-prod only)
+function shouldSimulateProfileFailure(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (!isNonProduction()) return false;
+  return localStorage.getItem('auth_test_simulate_profile_failure') === 'true';
+}
+
 // Helper to fetch role with timeout
 async function fetchUserRoleWithTimeout(
   userId: string,
   signal: AbortSignal
 ): Promise<UserRole> {
+  // Check for simulation flag (non-prod only)
+  if (shouldSimulateProfileFailure()) {
+    // Clear the flag so it only triggers once
+    localStorage.removeItem('auth_test_simulate_profile_failure');
+    throw new Error("Simulated profile fetch failure for testing");
+  }
+
   const timeoutPromise = new Promise<never>((_, reject) => {
     const id = setTimeout(() => {
       reject(new Error("Profile fetch timeout"));

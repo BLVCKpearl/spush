@@ -14,7 +14,6 @@ import {
   QrCode,
   LogOut,
   UserCircle,
-  Shield,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -33,6 +32,8 @@ interface NavItem {
   permission: keyof Permission;
 }
 
+// Auth Test page is intentionally NOT in navigation - it's a staging-only internal tool
+// Access it directly via /admin/auth-test in non-production environments
 const navItems: NavItem[] = [
   { to: '/admin/orders', label: 'Orders', icon: ClipboardList, permission: 'canAccessOrders' },
   { to: '/admin/tables', label: 'Tables', icon: QrCode, permission: 'canManageTables' },
@@ -41,7 +42,6 @@ const navItems: NavItem[] = [
   { to: '/admin/bank-details', label: 'Bank Details', icon: CreditCard, permission: 'canManageBankDetails' },
   { to: '/admin/users', label: 'Users', icon: Users, permission: 'canManageUsers' },
   { to: '/admin/account', label: 'Account', icon: UserCircle, permission: 'canModifyOwnPassword' },
-  { to: '/admin/auth-test', label: 'Auth Test', icon: Shield, permission: 'canManageUsers' },
 ];
 
 export default function AdminLayout({ 
