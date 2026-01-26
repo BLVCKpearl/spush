@@ -32,7 +32,7 @@ export type AuthContextValue = {
   error: string | null;
   diagnostics: AuthDiagnostics | null;
   signIn: (email: string, password: string) => Promise<{ error: unknown | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: unknown | null }>;
+  signUp: (email: string, password: string, businessName?: string) => Promise<{ error: unknown | null }>;
   signOut: () => Promise<{ error: unknown | null }>;
   setCurrentTenant: (tenantId: string) => void;
   retry: () => void;
@@ -404,11 +404,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error ?? null };
   };
 
-  const signUp: AuthContextValue["signUp"] = async (email, password) => {
+  const signUp: AuthContextValue["signUp"] = async (email, password, businessName) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: window.location.origin },
+      options: { 
+        emailRedirectTo: window.location.origin,
+        data: businessName ? { business_name: businessName } : undefined
+      },
     });
     return { error: error ?? null };
   };

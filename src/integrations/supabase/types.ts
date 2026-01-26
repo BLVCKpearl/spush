@@ -514,6 +514,8 @@ export type Database = {
           id: string
           is_active: boolean
           must_change_password: boolean
+          onboarding_completed: boolean
+          onboarding_completed_at: string | null
           updated_at: string
           user_id: string
           venue_id: string | null
@@ -525,6 +527,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           must_change_password?: boolean
+          onboarding_completed?: boolean
+          onboarding_completed_at?: string | null
           updated_at?: string
           user_id: string
           venue_id?: string | null
@@ -536,6 +540,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           must_change_password?: boolean
+          onboarding_completed?: boolean
+          onboarding_completed_at?: string | null
           updated_at?: string
           user_id?: string
           venue_id?: string | null
@@ -749,6 +755,7 @@ export type Database = {
       expire_pending_orders: { Args: never; Returns: number }
       generate_order_reference: { Args: never; Returns: string }
       generate_qr_token: { Args: never; Returns: string }
+      generate_venue_slug: { Args: { base_text: string }; Returns: string }
       get_order_expiry_minutes: {
         Args: { p_venue_id: string }
         Returns: number
