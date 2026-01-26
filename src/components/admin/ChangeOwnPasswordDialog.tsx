@@ -59,20 +59,33 @@ export default function ChangeOwnPasswordDialog({
         password: newPassword,
       });
 
-      if (error) throw error;
+      if (error) {
+        toast({
+          title: 'Failed to update password',
+          description: error.message || 'An error occurred',
+          variant: 'destructive',
+        });
+        setIsSubmitting(false);
+        return;
+      }
 
       toast({
         title: 'Password updated',
         description: 'Your password has been changed successfully.',
       });
-      handleClose();
+      
+      // Reset state and close
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowPassword(false);
+      setIsSubmitting(false);
+      onOpenChange(false);
     } catch (error) {
       toast({
         title: 'Failed to update password',
         description: error instanceof Error ? error.message : 'An error occurred',
         variant: 'destructive',
       });
-    } finally {
       setIsSubmitting(false);
     }
   };
