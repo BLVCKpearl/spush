@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
+import AuthErrorScreen from '@/components/auth/AuthErrorScreen';
+import AuthLoadingScreen from '@/components/auth/AuthLoadingScreen';
 import { 
   ClipboardList, 
   UtensilsCrossed, 
@@ -13,7 +15,6 @@ import {
   Users,
   QrCode,
   LogOut,
-  Loader2,
   UserCircle,
 } from 'lucide-react';
 
@@ -39,51 +40,136 @@ const navItems: NavItem[] = [
   { to: '/admin/account', label: 'Account', icon: UserCircle, permission: 'canModifyOwnPassword' },
 ];
 
+const PROFILE_CHECK_TIMEOUT_MS = 4000;
+
 export default function AdminLayout({ children, title }: AdminLayoutProps) {
-  const { user, role, loading, signOut, isAuthenticated } = useAuth();
+  const { 
+    user, 
+    role, 
+    loading, 
+    signOut, 
+    isAuthenticated, 
+    authState, 
+    error, 
+    retry, 
+    goToLogin, 
+    hardRefresh 
+  } = useAuth();
   const permissions = usePermissions();
   const navigate = useNavigate();
   const [mustChangePassword, setMustChangePassword] = useState<boolean | null>(null);
+  const [profileCheckError, setProfileCheckError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  // Check if user must change password
+  // Check if user must change password with timeout
   useEffect(() => {
-    async function checkMustChangePassword() {
-      if (!user) return;
+    if (authState !== 'ready' || !user) {
+      setMustChangePassword(null);
+      return;
+    }
 
-      const { data } = await supabase
-        .from('profiles')
-        .select('must_change_password')
-        .eq('user_id', user.id)
-        .single();
+    // Cancel previous check
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    abortRef.current = new AbortController();
+    const signal = abortRef.current.signal;
 
-      if (data?.must_change_password) {
-        navigate('/admin/force-reset');
-      } else {
-        setMustChangePassword(false);
+    const checkMustChangePassword = async () => {
+      const timeoutId = setTimeout(() => {
+        if (!signal.aborted) {
+          setProfileCheckError("Profile check timed out. Please retry.");
+        }
+      }, PROFILE_CHECK_TIMEOUT_MS);
+
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('must_change_password')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        clearTimeout(timeoutId);
+
+        if (signal.aborted) return;
+
+        if (error) {
+          setProfileCheckError("Failed to check profile. Please retry.");
+          return;
+        }
+
+        if (data?.must_change_password) {
+          navigate('/admin/force-reset');
+        } else {
+          setMustChangePassword(false);
+          setProfileCheckError(null);
+        }
+      } catch {
+        clearTimeout(timeoutId);
+        if (!signal.aborted) {
+          setProfileCheckError("Failed to check profile. Please retry.");
+        }
       }
-    }
+    };
 
-    if (!loading && isAuthenticated) {
-      checkMustChangePassword();
-    }
-  }, [user, loading, isAuthenticated, navigate]);
+    checkMustChangePassword();
+
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+    };
+  }, [authState, user, navigate]);
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/admin/login');
   };
 
-  // Show loading state
-  if (loading || (isAuthenticated && mustChangePassword === null)) {
+  const handleGoToLogin = () => {
+    goToLogin();
+    navigate('/admin/login');
+  };
+
+  // Handle auth error states
+  if (authState === 'error_timeout' || authState === 'error_profile') {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <AuthErrorScreen
+        message={error || "Auth check failed. Retry or sign in again."}
+        onRetry={retry}
+        onGoToLogin={handleGoToLogin}
+        onHardRefresh={hardRefresh}
+      />
     );
   }
 
+  // Handle profile check error
+  if (profileCheckError) {
+    return (
+      <AuthErrorScreen
+        message={profileCheckError}
+        onRetry={() => {
+          setProfileCheckError(null);
+          setMustChangePassword(null);
+        }}
+        onGoToLogin={handleGoToLogin}
+        onHardRefresh={hardRefresh}
+      />
+    );
+  }
+
+  // Show loading state (never more than 4s due to timeouts in AuthContext)
+  if (loading) {
+    return <AuthLoadingScreen authState={authState} />;
+  }
+
+  // Waiting for profile check after auth ready
+  if (authState === 'ready' && isAuthenticated && mustChangePassword === null) {
+    return <AuthLoadingScreen authState="loading_profile" />;
+  }
+
   // Redirect to login if not authenticated
-  if (!isAuthenticated) {
+  if (authState === 'unauthenticated' || !isAuthenticated) {
     navigate('/admin/login');
     return null;
   }
