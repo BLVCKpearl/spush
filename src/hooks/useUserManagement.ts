@@ -8,24 +8,33 @@ export interface ManagedUser {
   is_active: boolean;
   created_at: string;
   role: 'admin' | 'staff' | null;
+  tenant_role: 'tenant_admin' | 'staff' | null;
+  venue_id: string | null;
 }
 
-export function useUsers() {
+/**
+ * Tenant-scoped users hook
+ */
+export function useUsers(tenantId: string | null) {
   return useQuery({
-    queryKey: ['managed-users'],
+    queryKey: ['managed-users', tenantId],
     queryFn: async () => {
-      // Fetch profiles with their roles
+      if (!tenantId) return [];
+      
+      // Fetch profiles for this tenant
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('user_id, email, display_name, is_active, created_at')
+        .select('user_id, email, display_name, is_active, created_at, venue_id')
+        .eq('venue_id', tenantId)
         .order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
 
-      // Fetch all user roles
+      // Fetch user roles for this tenant
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
-        .select('user_id, role');
+        .select('user_id, role, tenant_role, tenant_id')
+        .eq('tenant_id', tenantId);
 
       if (rolesError) throw rolesError;
 
@@ -35,11 +44,47 @@ export function useUsers() {
         return {
           ...profile,
           role: userRole?.role || null,
+          tenant_role: userRole?.tenant_role || null,
         };
       });
 
-      // Filter to only show users with admin/staff roles
-      return users.filter((u) => u.role !== null);
+      // Filter to only show users with tenant roles
+      return users.filter((u) => u.tenant_role !== null);
+    },
+    enabled: !!tenantId,
+  });
+}
+
+/**
+ * All users - only for super admins
+ */
+export function useAllUsers() {
+  return useQuery({
+    queryKey: ['all-managed-users'],
+    queryFn: async () => {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('user_id, email, display_name, is_active, created_at, venue_id')
+        .order('created_at', { ascending: false });
+
+      if (profilesError) throw profilesError;
+
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role, tenant_role, tenant_id');
+
+      if (rolesError) throw rolesError;
+
+      const users: ManagedUser[] = (profiles || []).map((profile) => {
+        const userRole = roles?.find((r) => r.user_id === profile.user_id);
+        return {
+          ...profile,
+          role: userRole?.role || null,
+          tenant_role: userRole?.tenant_role || null,
+        };
+      });
+
+      return users.filter((u) => u.role !== null || u.tenant_role !== null);
     },
   });
 }
@@ -53,11 +98,13 @@ export function useCreateUser() {
       fullName,
       role,
       password,
+      tenantId,
     }: {
       email: string;
       fullName: string;
       role: 'admin' | 'staff';
       password: string;
+      tenantId?: string;
     }) => {
       const { data, error } = await supabase.functions.invoke('manage-users', {
         body: {
@@ -66,6 +113,7 @@ export function useCreateUser() {
           fullName,
           role,
           password,
+          tenantId,
         },
       });
 
@@ -76,6 +124,7 @@ export function useCreateUser() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['managed-users'] });
+      queryClient.invalidateQueries({ queryKey: ['all-managed-users'] });
     },
   });
 }
@@ -112,6 +161,7 @@ export function useUpdateUser() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['managed-users'] });
+      queryClient.invalidateQueries({ queryKey: ['all-managed-users'] });
     },
   });
 }
@@ -135,6 +185,7 @@ export function useResetPassword() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['managed-users'] });
+      queryClient.invalidateQueries({ queryKey: ['all-managed-users'] });
     },
   });
 }
@@ -158,6 +209,7 @@ export function useDeactivateUser() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['managed-users'] });
+      queryClient.invalidateQueries({ queryKey: ['all-managed-users'] });
     },
   });
 }
@@ -194,19 +246,26 @@ export function useDeleteUser() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['managed-users'] });
+      queryClient.invalidateQueries({ queryKey: ['all-managed-users'] });
     },
   });
 }
 
-export function useAuditLogs() {
+export function useAuditLogs(tenantId?: string | null) {
   return useQuery({
-    queryKey: ['audit-logs'],
+    queryKey: ['audit-logs', tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('admin_audit_logs')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(100);
+      
+      if (tenantId) {
+        query = query.eq('tenant_id', tenantId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return data;

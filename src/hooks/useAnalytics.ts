@@ -14,9 +14,13 @@ interface AnalyticsData {
 // Statuses that represent "paid" orders
 const PAID_STATUSES: OrderStatus[] = ['confirmed', 'preparing', 'ready', 'completed'];
 
-export function useTodayAnalytics(venueId?: string) {
+/**
+ * Tenant-scoped analytics hook
+ * @param tenantId - Required for tenant admins, optional for super admins
+ */
+export function useTodayAnalytics(tenantId: string | null | undefined) {
   return useQuery({
-    queryKey: ['analytics', 'today', venueId],
+    queryKey: ['analytics', 'today', tenantId],
     queryFn: async (): Promise<AnalyticsData> => {
       const today = new Date();
       const dayStart = startOfDay(today).toISOString();
@@ -29,8 +33,9 @@ export function useTodayAnalytics(venueId?: string) {
         .gte('created_at', dayStart)
         .lte('created_at', dayEnd);
 
-      if (venueId) {
-        query = query.eq('venue_id', venueId);
+      // Always scope to tenant when provided
+      if (tenantId) {
+        query = query.eq('venue_id', tenantId);
       }
 
       const { data, error } = await query;
@@ -50,9 +55,13 @@ export function useTodayAnalytics(venueId?: string) {
         averageOrderValueKobo,
       };
     },
+    enabled: tenantId !== undefined, // Allow null for super admins
   });
 }
 
+/**
+ * Venues list for super admins
+ */
 export function useVenues() {
   return useQuery({
     queryKey: ['venues'],
