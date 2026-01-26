@@ -15,6 +15,7 @@ import {
   QrCode,
   LogOut,
   UserCircle,
+  Settings,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -41,6 +42,7 @@ const navItems: NavItem[] = [
   { to: '/admin/analytics', label: 'Analytics', icon: BarChart3, permission: 'canAccessAnalytics' },
   { to: '/admin/menu', label: 'Menu', icon: UtensilsCrossed, permission: 'canManageMenu' },
   { to: '/admin/bank-details', label: 'Bank Details', icon: CreditCard, permission: 'canManageBankDetails' },
+  { to: '/admin/settings', label: 'Settings', icon: Settings, permission: 'canManageSettings' },
   { to: '/admin/users', label: 'Users', icon: Users, permission: 'canManageUsers' },
   { to: '/admin/account', label: 'Account', icon: UserCircle, permission: 'canModifyOwnPassword' },
 ];

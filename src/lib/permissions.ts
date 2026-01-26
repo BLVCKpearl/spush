@@ -17,6 +17,7 @@ export interface Permission {
   canManageTables: boolean;
   canAccessAnalytics: boolean;
   canManageBankDetails: boolean;
+  canManageSettings: boolean;
   canManageUsers: boolean;
   canResetPasswords: boolean;
   canAssignRoles: boolean;
@@ -38,6 +39,7 @@ export function getPermissions(role: UserRole): Permission {
       canManageTables: true,
       canAccessAnalytics: true,
       canManageBankDetails: true,
+      canManageSettings: true,
       canManageUsers: true,
       canResetPasswords: true,
       canAssignRoles: true,
@@ -59,6 +61,7 @@ export function getPermissions(role: UserRole): Permission {
       canManageTables: true,
       canAccessAnalytics: true,
       canManageBankDetails: true,
+      canManageSettings: true,
       canManageUsers: true,
       canResetPasswords: true,
       canAssignRoles: true,
@@ -80,6 +83,7 @@ export function getPermissions(role: UserRole): Permission {
       canManageTables: false,
       canAccessAnalytics: false,
       canManageBankDetails: false,
+      canManageSettings: false,
       canManageUsers: false,
       canResetPasswords: false,
       canAssignRoles: false,
@@ -98,6 +102,7 @@ export function getPermissions(role: UserRole): Permission {
     canManageTables: false,
     canAccessAnalytics: false,
     canManageBankDetails: false,
+    canManageSettings: false,
     canManageUsers: false,
     canResetPasswords: false,
     canAssignRoles: false,
