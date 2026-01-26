@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 export default function AdminLoginPage() {
   const navigate = useNavigate();
-  const { signIn, user, role, isAdmin, isStaff, loading } = useAuth();
+  const { signIn, signOut, user, isAdmin, isStaff, loading } = useAuth();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -52,10 +52,18 @@ export default function AdminLoginPage() {
     setIsSubmitting(true);
     
     try {
+      // If we somehow have a stale session, clear it before trying again.
+      if (user) {
+        await signOut().catch(() => {});
+      }
+
       const { error: signInError } = await signIn(email, password);
       
       if (signInError) {
         setError(getErrorMessage(signInError) ?? 'Login failed.');
+
+        // Ensure the user always lands back on the login page after an unsuccessful attempt.
+        navigate('/admin/login', { replace: true });
         return;
       }
 
@@ -79,8 +87,10 @@ export default function AdminLoginPage() {
   }
 
   const handleSignOut = async () => {
-    await signIn('', '').catch(() => {}); // Clear any partial state
-    window.location.reload(); // Force clean state
+    await signOut().catch(() => {});
+    navigate('/admin/login', { replace: true });
+    // Hard reset to clear any cached state/listeners.
+    window.location.reload();
   };
 
   // If user is logged in but has no role, show access denied with option to sign out
