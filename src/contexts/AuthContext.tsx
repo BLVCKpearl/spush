@@ -41,6 +41,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let isMounted = true;
     let initialLoadDone = false;
 
+    // Absolute safety: never let the app stay in a loading state forever even if
+    // auth network calls hang or events never arrive.
+    const hardStop = window.setTimeout(() => {
+      if (!isMounted || initialLoadDone) return;
+      initialLoadDone = true;
+      setLoading(false);
+    }, 3000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, nextSession) => {
         if (!isMounted) return;
@@ -91,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       isMounted = false;
       clearTimeout(timeout);
+      clearTimeout(hardStop);
       subscription.unsubscribe();
     };
   }, []);
