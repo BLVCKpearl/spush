@@ -26,6 +26,7 @@ import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminAccountPage from "./pages/admin/AdminAccountPage";
 import AdminForceResetPage from "./pages/admin/AdminForceResetPage";
 import AdminAuthTestPage from "./pages/admin/AdminAuthTestPage";
+import AdminOnboardingPage from "./pages/admin/AdminOnboardingPage";
 import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
 import TenantsPage from "./pages/super-admin/TenantsPage";
 import AllUsersPage from "./pages/super-admin/AllUsersPage";
@@ -70,6 +71,7 @@ const App = () => (
               <Route path="/admin/users" element={<AdminUsersPage />} />
               <Route path="/admin/account" element={<AdminAccountPage />} />
               <Route path="/admin/force-reset" element={<AdminForceResetPage />} />
+              <Route path="/admin/onboarding" element={<AdminOnboardingPage />} />
               <Route path="/admin/auth-test" element={
                 <StagingOnlyRoute>
                   <AdminAuthTestPage />
