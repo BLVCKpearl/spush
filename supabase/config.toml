@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.get-signed-proof-url]
 verify_jwt = false
+
+[functions.send-staff-invitation]
+verify_jwt = false
+
+[functions.accept-invitation]
+verify_jwt = false

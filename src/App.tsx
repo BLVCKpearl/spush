@@ -28,6 +28,7 @@ import AdminForceResetPage from "./pages/admin/AdminForceResetPage";
 import AdminAuthTestPage from "./pages/admin/AdminAuthTestPage";
 import AdminOnboardingPage from "./pages/admin/AdminOnboardingPage";
 import AdminSettingsPage from "./pages/admin/AdminSettingsPage";
+import AcceptInvitePage from "./pages/admin/AcceptInvitePage";
 import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
 import TenantsPage from "./pages/super-admin/TenantsPage";
 import AllUsersPage from "./pages/super-admin/AllUsersPage";
@@ -74,6 +75,7 @@ const App = () => (
               <Route path="/admin/force-reset" element={<AdminForceResetPage />} />
               <Route path="/admin/settings" element={<AdminSettingsPage />} />
               <Route path="/admin/onboarding" element={<AdminOnboardingPage />} />
+              <Route path="/admin/accept-invite" element={<AcceptInvitePage />} />
               <Route path="/admin/auth-test" element={
                 <StagingOnlyRoute>
                   <AdminAuthTestPage />

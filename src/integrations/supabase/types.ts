@@ -556,6 +556,50 @@ export type Database = {
           },
         ]
       }
+      staff_invitations: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          role: Database["public"]["Enums"]["tenant_role"]
+          tenant_id: string
+          token_hash: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          email: string
+          expires_at: string
+          id?: string
+          invited_by: string
+          role?: Database["public"]["Enums"]["tenant_role"]
+          tenant_id: string
+          token_hash: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          role?: Database["public"]["Enums"]["tenant_role"]
+          tenant_id?: string
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_invitations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       super_admins: {
         Row: {
           created_at: string
@@ -742,6 +786,10 @@ export type Database = {
       }
     }
     Functions: {
+      accept_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: undefined
+      }
       check_order_rate_limit: { Args: { p_table_id: string }; Returns: boolean }
       check_password_reset_rate_limit: {
         Args: { p_target_user_id: string }
@@ -753,6 +801,7 @@ export type Database = {
         Returns: number
       }
       expire_pending_orders: { Args: never; Returns: number }
+      generate_invitation_token: { Args: never; Returns: string }
       generate_order_reference: { Args: never; Returns: string }
       generate_qr_token: { Args: never; Returns: string }
       generate_venue_slug: { Args: { base_text: string }; Returns: string }
@@ -795,6 +844,16 @@ export type Database = {
           id: string
           label: string
           venue_id: string
+        }[]
+      }
+      validate_invitation_token: {
+        Args: { p_token_hash: string }
+        Returns: {
+          email: string
+          invitation_id: string
+          role: Database["public"]["Enums"]["tenant_role"]
+          tenant_id: string
+          venue_name: string
         }[]
       }
     }
