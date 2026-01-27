@@ -10,6 +10,7 @@ export interface ManagedTenant {
   venue_slug: string;
   created_at: string;
   is_suspended: boolean;
+  is_active: boolean;
   suspended_at: string | null;
   suspended_by: string | null;
   _count?: {
