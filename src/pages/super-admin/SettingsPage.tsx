@@ -7,11 +7,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Plus, Shield, Trash2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertTriangle, Plus, Shield, Trash2, Loader2, ToggleLeft, Building2 } from "lucide-react";
 import { toast } from "sonner";
+import { useTenants } from "@/hooks/useTenantManagement";
+import { useFeatureFlagsAdmin } from "@/hooks/useFeatureFlags";
+
+// Available feature flags with descriptions
+const AVAILABLE_FEATURES = [
+  { key: 'cash_payments', label: 'Cash Payments', description: 'Allow customers to pay with cash on delivery' },
+  { key: 'bank_transfers', label: 'Bank Transfers', description: 'Allow customers to pay via bank transfer' },
+  { key: 'customer_name_required', label: 'Require Customer Name', description: 'Require customers to enter their name when ordering' },
+  { key: 'show_estimated_time', label: 'Show Estimated Time', description: 'Display estimated preparation time to customers' },
+  { key: 'advanced_analytics', label: 'Advanced Analytics', description: 'Enable advanced analytics and reporting features' },
+  { key: 'multi_location', label: 'Multi-Location', description: 'Allow tenant to manage multiple venue locations' },
+  { key: 'loyalty_program', label: 'Loyalty Program', description: 'Enable customer loyalty and rewards features' },
+  { key: 'custom_branding', label: 'Custom Branding', description: 'Allow custom branding and white-labeling' },
+];
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -19,9 +36,10 @@ export default function SettingsPage() {
   const [isAddSuperAdminOpen, setIsAddSuperAdminOpen] = useState(false);
   const [newSuperAdminEmail, setNewSuperAdminEmail] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
 
   // Fetch super admins
-  const { data: superAdmins, isLoading } = useQuery({
+  const { data: superAdmins, isLoading: superAdminsLoading } = useQuery({
     queryKey: ["super-admins"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -33,6 +51,12 @@ export default function SettingsPage() {
       return data;
     },
   });
+
+  // Fetch tenants for feature flags management
+  const { data: tenants } = useTenants();
+
+  // Feature flags for selected tenant
+  const { flags: tenantFlags, updateFlag, isLoading: flagsLoading } = useFeatureFlagsAdmin(selectedTenantId ?? undefined);
 
   // Add super admin mutation
   const addSuperAdminMutation = useMutation({
@@ -109,83 +133,188 @@ export default function SettingsPage() {
     addSuperAdminMutation.mutate(newSuperAdminEmail.trim());
   };
 
+  const handleToggleFlag = async (featureKey: string, currentValue: boolean) => {
+    if (!selectedTenantId) return;
+    try {
+      await updateFlag(featureKey, !currentValue);
+      toast.success(`Feature "${featureKey}" ${!currentValue ? 'enabled' : 'disabled'}`);
+    } catch (err) {
+      toast.error("Failed to update feature flag");
+    }
+  };
+
+  const getFlagValue = (featureKey: string): boolean => {
+    const flag = tenantFlags.find((f) => f.feature_key === featureKey);
+    return flag?.is_enabled ?? false;
+  };
+
   return (
     <div className="p-6 space-y-6">
       <PageTitle title="Settings" subtitle="Platform configuration and super admin management" />
 
-      {/* Super Admins Management */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
+      <Tabs defaultValue="super-admins" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="super-admins" className="gap-2">
+            <Shield className="h-4 w-4" />
+            Super Admins
+          </TabsTrigger>
+          <TabsTrigger value="feature-flags" className="gap-2">
+            <ToggleLeft className="h-4 w-4" />
+            Feature Flags
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="super-admins">
+          {/* Super Admins Management */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5" />
+                    Super Admins
+                  </CardTitle>
+                  <CardDescription>
+                    Users with global access to all tenants and platform settings
+                  </CardDescription>
+                </div>
+                <Button onClick={() => setIsAddSuperAdminOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Super Admin
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Added</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {superAdminsLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                      </TableCell>
+                    </TableRow>
+                  ) : superAdmins?.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                        No super admins found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    superAdmins?.map((admin) => (
+                      <TableRow key={admin.id}>
+                        <TableCell className="font-medium">
+                          {admin.display_name || "—"}
+                          {admin.user_id === user?.id && (
+                            <Badge variant="secondary" className="ml-2">You</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>{admin.email}</TableCell>
+                        <TableCell>
+                          {new Date(admin.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeleteConfirmId(admin.id)}
+                            disabled={admin.user_id === user?.id}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="feature-flags">
+          {/* Feature Flags Management */}
+          <Card>
+            <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Super Admins
+                <ToggleLeft className="h-5 w-5" />
+                Feature Flags
               </CardTitle>
               <CardDescription>
-                Users with global access to all tenants and platform settings
+                Enable or disable features for specific tenants at runtime
               </CardDescription>
-            </div>
-            <Button onClick={() => setIsAddSuperAdminOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Super Admin
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Added</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                    Loading...
-                  </TableCell>
-                </TableRow>
-              ) : superAdmins?.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                    No super admins found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                superAdmins?.map((admin) => (
-                  <TableRow key={admin.id}>
-                    <TableCell className="font-medium">
-                      {admin.display_name || "—"}
-                      {admin.user_id === user?.id && (
-                        <Badge variant="secondary" className="ml-2">You</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>{admin.email}</TableCell>
-                    <TableCell>
-                      {new Date(admin.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => setDeleteConfirmId(admin.id)}
-                        disabled={admin.user_id === user?.id}
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Tenant Selector */}
+              <div className="space-y-2">
+                <Label>Select Tenant</Label>
+                <Select
+                  value={selectedTenantId ?? ""}
+                  onValueChange={(value) => setSelectedTenantId(value || null)}
+                >
+                  <SelectTrigger className="w-full max-w-md">
+                    <SelectValue placeholder="Select a tenant to manage features..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tenants?.map((tenant) => (
+                      <SelectItem key={tenant.id} value={tenant.id}>
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4 text-muted-foreground" />
+                          {tenant.name}
+                          <span className="text-muted-foreground">({tenant.venue_slug})</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Feature Flags List */}
+              {selectedTenantId ? (
+                flagsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {AVAILABLE_FEATURES.map((feature) => (
+                      <div
+                        key={feature.key}
+                        className="flex items-center justify-between p-4 rounded-lg border"
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                        <div className="space-y-1">
+                          <div className="font-medium">{feature.label}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {feature.description}
+                          </div>
+                        </div>
+                        <Switch
+                          checked={getFlagValue(feature.key)}
+                          onCheckedChange={() =>
+                            handleToggleFlag(feature.key, getFlagValue(feature.key))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  Select a tenant to manage their feature flags
+                </div>
               )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Add Super Admin Dialog */}
       <Dialog open={isAddSuperAdminOpen} onOpenChange={setIsAddSuperAdminOpen}>

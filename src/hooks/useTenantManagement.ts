@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { logAuditEvent } from '@/hooks/useAuditLog';
 import { toast } from 'sonner';
 
 export interface ManagedTenant {
@@ -65,7 +66,7 @@ export function useSuspendTenant() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ tenantId, suspend }: { tenantId: string; suspend: boolean }) => {
+    mutationFn: async ({ tenantId, suspend, tenantName }: { tenantId: string; suspend: boolean; tenantName?: string }) => {
       const { error } = await supabase
         .from('venues')
         .update({
@@ -76,6 +77,17 @@ export function useSuspendTenant() {
         .eq('id', tenantId);
 
       if (error) throw error;
+
+      // Log audit event
+      if (user) {
+        await logAuditEvent(user.id, {
+          action: suspend ? 'tenant_suspended' : 'tenant_reactivated',
+          tenantId,
+          metadata: {
+            tenant_name: tenantName,
+          },
+        });
+      }
     },
     onSuccess: (_, { suspend }) => {
       queryClient.invalidateQueries({ queryKey: ['super-admin-tenants'] });

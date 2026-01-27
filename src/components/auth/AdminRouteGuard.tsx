@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions, type Permission } from '@/hooks/usePermissions';
+import { useTenantSuspension } from '@/hooks/useTenantSuspension';
 import { supabase } from '@/integrations/supabase/client';
 import AuthErrorScreen, { type AuthDiagnostics } from './AuthErrorScreen';
 import AuthLoadingScreen from './AuthLoadingScreen';
 import ForbiddenScreen from './ForbiddenScreen';
+import SuspendedScreen from './SuspendedScreen';
 
 interface AdminRouteGuardProps {
   children: React.ReactNode;
@@ -24,6 +26,7 @@ const PROFILE_CHECK_TIMEOUT_MS = 4000;
  * 2. Session exists but profile fetch fails → show error screen
  * 3. Role missing/invalid → treat as unauthenticated + log to audit_logs
  * 4. Route requires admin and user is staff → show Forbidden page
+ * 5. Tenant suspended → show Suspended screen (super admins bypass)
  */
 export default function AdminRouteGuard({ 
   children, 
@@ -39,9 +42,11 @@ export default function AdminRouteGuard({
     goToLogin, 
     hardRefresh,
     isAuthenticated,
-    diagnostics
+    diagnostics,
+    isSuperAdmin
   } = useAuth();
   const permissions = usePermissions();
+  const { isSuspended, venueName, isLoading: suspensionLoading } = useTenantSuspension();
   const navigate = useNavigate();
   
   const [mustChangePassword, setMustChangePassword] = useState<boolean | null>(null);
@@ -220,6 +225,16 @@ export default function AdminRouteGuard({
   // Not authenticated - redirect handled by useEffect
   if (authState === 'unauthenticated' || !isAuthenticated) {
     return <AuthLoadingScreen authState="checking_session" />;
+  }
+
+  // Check tenant suspension (super admins bypass this)
+  if (!isSuperAdmin && !suspensionLoading && isSuspended) {
+    return <SuspendedScreen venueName={venueName ?? undefined} />;
+  }
+
+  // Still loading suspension status
+  if (!isSuperAdmin && suspensionLoading) {
+    return <AuthLoadingScreen authState="loading_profile" />;
   }
 
   // Check permission-based access
