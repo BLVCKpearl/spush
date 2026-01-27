@@ -202,16 +202,26 @@ export default function AllUsersPage() {
     mutationFn: async ({ 
       userId, 
       displayName, 
-      tenantRole 
+      roleType,
+      tenantId: newTenantId,
     }: { 
       userId: string; 
       displayName: string; 
-      tenantRole?: "tenant_admin" | "staff";
+      roleType: "super_admin" | "tenant_admin" | "staff";
+      tenantId: string | null;
     }) => {
-      // Update profile
+      // Get current user data to check role changes
+      const targetUser = users?.find(u => u.user_id === userId);
+      const wasSuperAdmin = targetUser?.is_super_admin;
+      const isSuperAdmin = roleType === "super_admin";
+
+      // Update profile - clear venue_id for super admins
       const { error: profileError } = await supabase
         .from("profiles")
-        .update({ display_name: displayName })
+        .update({ 
+          display_name: displayName,
+          venue_id: isSuperAdmin ? null : newTenantId,
+        })
         .eq("user_id", userId);
 
       if (profileError) throw profileError;
@@ -225,17 +235,54 @@ export default function AllUsersPage() {
         },
       });
 
-      // Update tenant role if provided
-      if (tenantRole) {
+      // Handle super_admin role changes
+      if (isSuperAdmin && !wasSuperAdmin) {
+        // Promote to super admin - add to super_admins table
+        const { error: insertError } = await supabase
+          .from("super_admins")
+          .insert({ 
+            user_id: userId, 
+            email: targetUser?.email || "",
+            display_name: displayName,
+          });
+        if (insertError) throw insertError;
+
+        // Remove all tenant roles
+        await supabase.from("user_roles").delete().eq("user_id", userId);
+
+      } else if (!isSuperAdmin && wasSuperAdmin) {
+        // Demote from super admin - remove from super_admins table
+        const { error: deleteError } = await supabase
+          .from("super_admins")
+          .delete()
+          .eq("user_id", userId);
+        if (deleteError) throw deleteError;
+
+        // Add tenant role
         const { error: roleError } = await supabase
           .from("user_roles")
-          .update({ 
-            tenant_role: tenantRole,
-            role: tenantRole === "tenant_admin" ? "admin" : "staff"
-          })
-          .eq("user_id", userId)
-          .not("tenant_id", "is", null);
+          .insert({ 
+            user_id: userId, 
+            role: roleType === "tenant_admin" ? "admin" : "staff",
+            tenant_id: newTenantId,
+            tenant_role: roleType,
+          });
+        if (roleError) throw roleError;
 
+      } else if (!isSuperAdmin) {
+        // Update existing tenant role
+        // First, delete all existing roles for this user
+        await supabase.from("user_roles").delete().eq("user_id", userId);
+        
+        // Then insert the new role
+        const { error: roleError } = await supabase
+          .from("user_roles")
+          .insert({ 
+            user_id: userId, 
+            role: roleType === "tenant_admin" ? "admin" : "staff",
+            tenant_id: newTenantId,
+            tenant_role: roleType,
+          });
         if (roleError) throw roleError;
       }
 
@@ -246,7 +293,8 @@ export default function AllUsersPage() {
         target_user_id: userId,
         metadata: { 
           display_name: displayName,
-          tenant_role: tenantRole,
+          role_type: roleType,
+          tenant_id: newTenantId,
           timestamp: new Date().toISOString() 
         },
       });

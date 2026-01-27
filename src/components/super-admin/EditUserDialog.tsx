@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -17,13 +18,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Pencil } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Pencil, AlertTriangle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+
+type UserRoleType = "super_admin" | "tenant_admin" | "staff";
 
 interface UserData {
   user_id: string;
   email: string | null;
   display_name: string | null;
   is_super_admin: boolean;
+  venue_id: string | null;
   roles?: Array<{ id: string; role: string; tenant_role: string | null; tenant_id: string | null }>;
 }
 
@@ -31,7 +37,12 @@ interface EditUserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   user: UserData | null;
-  onSave: (data: { userId: string; displayName: string; tenantRole?: "tenant_admin" | "staff" }) => Promise<void>;
+  onSave: (data: { 
+    userId: string; 
+    displayName: string; 
+    roleType: UserRoleType;
+    tenantId: string | null;
+  }) => Promise<void>;
   isSaving: boolean;
 }
 
@@ -43,33 +54,73 @@ export default function EditUserDialog({
   isSaving,
 }: EditUserDialogProps) {
   const [displayName, setDisplayName] = useState("");
-  const [tenantRole, setTenantRole] = useState<"tenant_admin" | "staff">("staff");
+  const [roleType, setRoleType] = useState<UserRoleType>("staff");
+  const [tenantId, setTenantId] = useState<string | null>(null);
+
+  // Fetch all venues for tenant selection
+  const { data: venues } = useQuery({
+    queryKey: ["venues-for-edit"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("venues")
+        .select("id, name")
+        .eq("is_suspended", false)
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open,
+  });
 
   useEffect(() => {
     if (user) {
       setDisplayName(user.display_name || "");
-      const currentTenantRole = user.roles?.find(r => r.tenant_role)?.tenant_role;
-      setTenantRole(currentTenantRole === "tenant_admin" ? "tenant_admin" : "staff");
+      
+      // Determine current role type
+      if (user.is_super_admin) {
+        setRoleType("super_admin");
+        setTenantId(null); // Super admins have no tenant
+      } else {
+        const tenantAdminRole = user.roles?.find(r => r.tenant_role === "tenant_admin");
+        if (tenantAdminRole) {
+          setRoleType("tenant_admin");
+          setTenantId(tenantAdminRole.tenant_id);
+        } else {
+          setRoleType("staff");
+          const staffRole = user.roles?.find(r => r.tenant_role === "staff" || r.tenant_id);
+          setTenantId(staffRole?.tenant_id || user.venue_id);
+        }
+      }
     }
   }, [user]);
+
+  // When role changes to super_admin, clear tenant
+  useEffect(() => {
+    if (roleType === "super_admin") {
+      setTenantId(null);
+    }
+  }, [roleType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
-    const hasTenantRole = user.roles?.some(r => r.tenant_role);
-    
+    // Validate: non-super-admin roles require a tenant
+    if (roleType !== "super_admin" && !tenantId) {
+      return; // Don't submit without tenant for non-super-admin
+    }
+
     await onSave({
       userId: user.user_id,
       displayName,
-      tenantRole: hasTenantRole ? tenantRole : undefined,
+      roleType,
+      tenantId: roleType === "super_admin" ? null : tenantId,
     });
   };
 
   if (!user) return null;
 
-  const hasTenantRole = user.roles?.some(r => r.tenant_role);
-  const isSuperAdminUser = user.is_super_admin;
+  const requiresTenant = roleType !== "super_admin";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -80,7 +131,7 @@ export default function EditUserDialog({
             Edit User
           </DialogTitle>
           <DialogDescription>
-            Update user information and permissions.
+            Update user information, role, and tenant assignment.
           </DialogDescription>
         </DialogHeader>
 
@@ -110,32 +161,60 @@ export default function EditUserDialog({
             />
           </div>
 
-          {hasTenantRole && !isSuperAdminUser && (
-            <div className="space-y-2">
-              <Label htmlFor="role">Tenant Role</Label>
-              <Select 
-                value={tenantRole} 
-                onValueChange={(v) => setTenantRole(v as "tenant_admin" | "staff")}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="staff">Staff</SelectItem>
-                  <SelectItem value="tenant_admin">Tenant Admin</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Tenant Admin has full access within their venue.
-              </p>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="roleType">Role</Label>
+            <Select 
+              value={roleType} 
+              onValueChange={(v) => setRoleType(v as UserRoleType)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="super_admin">Super Admin</SelectItem>
+                <SelectItem value="tenant_admin">Tenant Admin</SelectItem>
+                <SelectItem value="staff">Staff</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {roleType === "super_admin" && "Super Admins have global access and are not tied to any tenant."}
+              {roleType === "tenant_admin" && "Tenant Admins have full control within their assigned venue."}
+              {roleType === "staff" && "Staff can manage orders within their assigned venue."}
+            </p>
+          </div>
+
+          {roleType === "super_admin" && (
+            <Alert className="border-primary/20 bg-primary/5">
+              <AlertTriangle className="h-4 w-4 text-primary" />
+              <AlertDescription className="text-sm">
+                Super Admins are <strong>not assigned to any tenant</strong>. They have platform-wide access.
+              </AlertDescription>
+            </Alert>
           )}
 
-          {isSuperAdminUser && (
-            <div className="p-3 rounded-lg border bg-muted/50">
-              <p className="text-sm text-muted-foreground">
-                Super Admin role cannot be changed from this dialog.
-              </p>
+          {requiresTenant && (
+            <div className="space-y-2">
+              <Label htmlFor="tenant">Tenant (Venue)</Label>
+              <Select 
+                value={tenantId || ""} 
+                onValueChange={(v) => setTenantId(v || null)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a venue..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {venues?.map((venue) => (
+                    <SelectItem key={venue.id} value={venue.id}>
+                      {venue.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!tenantId && (
+                <p className="text-xs text-destructive">
+                  A venue must be selected for {roleType === "tenant_admin" ? "Tenant Admins" : "Staff"}.
+                </p>
+              )}
             </div>
           )}
 
@@ -143,7 +222,10 @@ export default function EditUserDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSaving}>
+            <Button 
+              type="submit" 
+              disabled={isSaving || (requiresTenant && !tenantId)}
+            >
               {isSaving ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

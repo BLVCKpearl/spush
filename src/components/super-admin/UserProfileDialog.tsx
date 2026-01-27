@@ -28,6 +28,7 @@ interface UserProfile {
   email: string | null;
   display_name: string | null;
   is_active: boolean;
+  is_super_admin?: boolean;
   created_at: string;
   venue_id: string | null;
   venue_name?: string;
@@ -107,6 +108,7 @@ export default function UserProfileDialog({ user, open, onOpenChange }: UserProf
   };
 
   const getRoleLabel = () => {
+    if (user?.is_super_admin) return "Super Admin";
     if (!user?.roles?.length) return "No Role";
     const role = user.roles[0];
     if (role.tenant_role === "tenant_admin") return "Tenant Admin";
@@ -155,11 +157,13 @@ export default function UserProfileDialog({ user, open, onOpenChange }: UserProf
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Building2 className="h-4 w-4" />
-                <span>{user.venue_name || "No Tenant"}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
+              {!user.is_super_admin && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Building2 className="h-4 w-4" />
+                  <span>{user.venue_name || "No Tenant"}</span>
+                </div>
+              )}
+              <div className={`flex items-center gap-2 text-muted-foreground ${user.is_super_admin ? "col-span-2" : ""}`}>
                 <Badge variant="outline">{getRoleLabel()}</Badge>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground col-span-2">
