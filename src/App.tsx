@@ -36,6 +36,7 @@ import TenantsPage from "./pages/super-admin/TenantsPage";
 import TenantDetailPage from "./pages/super-admin/TenantDetailPage";
 import ImpersonationPage from "./pages/super-admin/ImpersonationPage";
 import AllUsersPage from "./pages/super-admin/AllUsersPage";
+import ArchivedUsersPage from "./pages/super-admin/ArchivedUsersPage";
 import GlobalAnalyticsPage from "./pages/super-admin/GlobalAnalyticsPage";
 import SettingsPage from "./pages/super-admin/SettingsPage";
 import NotFound from "./pages/NotFound";
@@ -94,6 +95,7 @@ const App = () => (
                     <Route path="tenants/:tenantId" element={<TenantDetailPage />} />
                     <Route path="impersonation" element={<ImpersonationPage />} />
                     <Route path="users" element={<AllUsersPage />} />
+                    <Route path="users/archived" element={<ArchivedUsersPage />} />
                     <Route path="analytics" element={<GlobalAnalyticsPage />} />
                     <Route path="settings" element={<SettingsPage />} />
                   </Route>

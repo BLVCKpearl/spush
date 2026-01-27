@@ -30,10 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Shield, ShieldCheck, User, MoreHorizontal, KeyRound, Ban, CheckCircle, Loader2, RefreshCw } from "lucide-react";
+import { Search, Shield, ShieldCheck, User, MoreHorizontal, KeyRound, Ban, CheckCircle, Loader2, Pencil, Archive } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import UserProfileDialog from "@/components/super-admin/UserProfileDialog";
+import EditUserDialog from "@/components/super-admin/EditUserDialog";
 
 interface UserWithRoles {
   id: string;
@@ -41,6 +42,7 @@ interface UserWithRoles {
   email: string | null;
   display_name: string | null;
   is_active: boolean;
+  is_archived: boolean;
   created_at: string;
   venue_id: string | null;
   venue_name?: string;
@@ -62,7 +64,8 @@ export default function AllUsersPage() {
   
   const [revokeDialogUser, setRevokeDialogUser] = useState<UserWithRoles | null>(null);
   const [resetDialogUser, setResetDialogUser] = useState<UserWithRoles | null>(null);
-  const [changeRoleDialogUser, setChangeRoleDialogUser] = useState<UserWithRoles | null>(null);
+  const [editDialogUser, setEditDialogUser] = useState<UserWithRoles | null>(null);
+  const [archiveDialogUser, setArchiveDialogUser] = useState<UserWithRoles | null>(null);
   const [profileDialogUser, setProfileDialogUser] = useState<UserWithRoles | null>(null);
 
   // Fetch all venues for filter dropdown
@@ -78,14 +81,15 @@ export default function AllUsersPage() {
     },
   });
 
-  // Fetch all users with their roles
+  // Fetch all users with their roles (excluding archived)
   const { data: users, isLoading } = useQuery({
     queryKey: ["super-admin-all-users"],
     queryFn: async () => {
-      // Get all profiles
+      // Get all profiles (excluding archived)
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
         .select("*")
+        .eq("is_archived", false)
         .order("created_at", { ascending: false });
 
       if (profilesError) throw profilesError;
@@ -111,6 +115,7 @@ export default function AllUsersPage() {
         const roles = userRoles?.filter((r) => r.user_id === profile.user_id) || [];
         return {
           ...profile,
+          is_archived: profile.is_archived || false,
           venue_name: profile.venue_id ? venueMap.get(profile.venue_id) : undefined,
           roles,
           is_super_admin: superAdminIds.has(profile.user_id),
@@ -159,7 +164,7 @@ export default function AllUsersPage() {
         body: {
           action: "service_set_password",
           userId,
-          newPassword: "Reset123!", // Temporary password
+          password: "Reset123!",
         },
       });
 
@@ -192,37 +197,101 @@ export default function AllUsersPage() {
     },
   });
 
-  // Change role mutation
-  const changeRoleMutation = useMutation({
-    mutationFn: async ({ userId, roleId, newRole }: { userId: string; roleId: string; newRole: "tenant_admin" | "staff" }) => {
-      const { error } = await supabase
-        .from("user_roles")
-        .update({ 
-          tenant_role: newRole,
-          role: newRole === "tenant_admin" ? "admin" : "staff"
-        })
-        .eq("id", roleId);
+  // Edit user mutation
+  const editUserMutation = useMutation({
+    mutationFn: async ({ 
+      userId, 
+      displayName, 
+      tenantRole 
+    }: { 
+      userId: string; 
+      displayName: string; 
+      tenantRole?: "tenant_admin" | "staff";
+    }) => {
+      // Update profile
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ display_name: displayName })
+        .eq("user_id", userId);
 
-      if (error) throw error;
+      if (profileError) throw profileError;
+
+      // Update user metadata in auth
+      await supabase.functions.invoke("manage-users", {
+        body: {
+          action: "update",
+          userId,
+          fullName: displayName,
+        },
+      });
+
+      // Update tenant role if provided
+      if (tenantRole) {
+        const { error: roleError } = await supabase
+          .from("user_roles")
+          .update({ 
+            tenant_role: tenantRole,
+            role: tenantRole === "tenant_admin" ? "admin" : "staff"
+          })
+          .eq("user_id", userId)
+          .not("tenant_id", "is", null);
+
+        if (roleError) throw roleError;
+      }
 
       // Log the action
       await supabase.from("admin_audit_logs").insert({
-        action: "user_role_changed",
+        action: "user_edited",
         actor_user_id: currentUser?.id || "",
         target_user_id: userId,
         metadata: { 
-          new_role: newRole,
-          timestamp: new Date().toISOString(),
+          display_name: displayName,
+          tenant_role: tenantRole,
+          timestamp: new Date().toISOString() 
         },
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["super-admin-all-users"] });
-      toast.success("User role updated successfully");
-      setChangeRoleDialogUser(null);
+      toast.success("User updated successfully");
+      setEditDialogUser(null);
     },
     onError: (error) => {
-      toast.error(`Failed to change role: ${error.message}`);
+      toast.error(`Failed to update user: ${error.message}`);
+    },
+  });
+
+  // Archive user mutation
+  const archiveMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ 
+          is_archived: true,
+          is_active: false,
+          archived_at: new Date().toISOString(),
+          archived_by: currentUser?.id
+        })
+        .eq("user_id", userId);
+
+      if (error) throw error;
+
+      // Log the action
+      await supabase.from("admin_audit_logs").insert({
+        action: "user_archived",
+        actor_user_id: currentUser?.id || "",
+        target_user_id: userId,
+        metadata: { timestamp: new Date().toISOString() },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["super-admin-all-users"] });
+      queryClient.invalidateQueries({ queryKey: ["archived-users"] });
+      toast.success("User archived successfully");
+      setArchiveDialogUser(null);
+    },
+    onError: (error) => {
+      toast.error(`Failed to archive user: ${error.message}`);
     },
   });
 
@@ -297,25 +366,6 @@ export default function AllUsersPage() {
     return <Badge variant="outline">No Role</Badge>;
   };
 
-  const getCurrentRole = (user: UserWithRoles | null | undefined): "tenant_admin" | "staff" | null => {
-    if (!user?.roles || user.roles.length === 0) return null;
-    const tenantAdminRole = user.roles.find((r) => r.tenant_role === "tenant_admin");
-    if (tenantAdminRole) return "tenant_admin";
-    const staffRole = user.roles.find((r) => r.tenant_role === "staff");
-    if (staffRole) return "staff";
-    return null;
-  };
-
-  const canManageUser = (user: UserWithRoles) => {
-    // Cannot manage super admins or self
-    return !user.is_super_admin && user.user_id !== currentUser?.id;
-  };
-
-  const canChangeRole = (user: UserWithRoles) => {
-    // Can only change role for non-super-admin users with a tenant role
-    return canManageUser(user) && user.roles?.some(r => r.tenant_role);
-  };
-
   const isStaffUser = (user: UserWithRoles) => {
     // Check if user is a staff member (not super admin, not tenant admin)
     if (user.is_super_admin) return false;
@@ -329,6 +379,8 @@ export default function AllUsersPage() {
       setProfileDialogUser(user);
     }
   };
+
+  const isSelf = (user: UserWithRoles) => user.user_id === currentUser?.id;
 
   return (
     <div className="p-6 space-y-6">
@@ -455,6 +507,9 @@ export default function AllUsersPage() {
                   >
                     <TableCell className="font-medium">
                       {user.display_name || "—"}
+                      {isSelf(user) && (
+                        <Badge variant="outline" className="ml-2 text-xs">You</Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {user.email}
@@ -486,25 +541,23 @@ export default function AllUsersPage() {
                       {formatDistanceToNow(new Date(user.created_at), { addSuffix: true })}
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      {canManageUser(user) && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setResetDialogUser(user)}>
-                              <KeyRound className="h-4 w-4 mr-2" />
-                              Reset Password
-                            </DropdownMenuItem>
-                            {canChangeRole(user) && (
-                              <DropdownMenuItem onClick={() => setChangeRoleDialogUser(user)}>
-                                <RefreshCw className="h-4 w-4 mr-2" />
-                                Change Role
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setEditDialogUser(user)}>
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setResetDialogUser(user)}>
+                            <KeyRound className="h-4 w-4 mr-2" />
+                            Reset Password
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          {!isSelf(user) && (
                             <DropdownMenuItem
                               onClick={() => setRevokeDialogUser(user)}
                               className={user.is_active ? "text-destructive focus:text-destructive" : "text-primary"}
@@ -521,9 +574,21 @@ export default function AllUsersPage() {
                                 </>
                               )}
                             </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
+                          )}
+                          {!isSelf(user) && !user.is_super_admin && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => setArchiveDialogUser(user)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Archive className="h-4 w-4 mr-2" />
+                                Archive User
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))
@@ -532,6 +597,17 @@ export default function AllUsersPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Edit User Dialog */}
+      <EditUserDialog
+        open={!!editDialogUser}
+        onOpenChange={(open) => !open && setEditDialogUser(null)}
+        user={editDialogUser}
+        onSave={async (data) => {
+          await editUserMutation.mutateAsync(data);
+        }}
+        isSaving={editUserMutation.isPending}
+      />
 
       {/* Revoke/Reactivate Confirmation Dialog */}
       <Dialog open={!!revokeDialogUser} onOpenChange={(open) => !open && setRevokeDialogUser(null)}>
@@ -591,56 +667,27 @@ export default function AllUsersPage() {
         </DialogContent>
       </Dialog>
 
-
-      {/* Change Role Dialog */}
-      <Dialog open={!!changeRoleDialogUser} onOpenChange={(open) => !open && setChangeRoleDialogUser(null)}>
+      {/* Archive User Confirmation Dialog */}
+      <Dialog open={!!archiveDialogUser} onOpenChange={(open) => !open && setArchiveDialogUser(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Change User Role</DialogTitle>
+            <DialogTitle>Archive User</DialogTitle>
             <DialogDescription>
-              Change the role for "{changeRoleDialogUser?.display_name || changeRoleDialogUser?.email}".
-              This will update their permissions within their current tenant.
+              Are you sure you want to archive "{archiveDialogUser?.display_name || archiveDialogUser?.email}"? 
+              They will be removed from the active users list and their access will be revoked. 
+              You can restore them later from the Archived Users page.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            {(() => {
-              const currentRole = getCurrentRole(changeRoleDialogUser);
-              const currentLabel = currentRole === "tenant_admin" ? "Tenant Admin" : currentRole === "staff" ? "Staff" : "Unknown";
-              const nextLabel = currentRole === "tenant_admin" ? "Staff" : currentRole === "staff" ? "Tenant Admin" : "Unknown";
-
-              return (
-                <>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Current role: <strong>{currentLabel}</strong>
-                  </p>
-                  <p className="text-sm">
-                    New role: <strong>{nextLabel}</strong>
-                  </p>
-                </>
-              );
-            })()}
-          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setChangeRoleDialogUser(null)}>
+            <Button variant="outline" onClick={() => setArchiveDialogUser(null)}>
               Cancel
             </Button>
             <Button
-              onClick={() => {
-                if (!changeRoleDialogUser) return;
-                const currentRole = getCurrentRole(changeRoleDialogUser);
-                const newRole = currentRole === "tenant_admin" ? "staff" : "tenant_admin";
-                const roleRecord = changeRoleDialogUser.roles?.find(r => r.tenant_role);
-                if (roleRecord) {
-                  changeRoleMutation.mutate({
-                    userId: changeRoleDialogUser.user_id,
-                    roleId: roleRecord.id,
-                    newRole,
-                  });
-                }
-              }}
-              disabled={changeRoleMutation.isPending}
+              variant="destructive"
+              onClick={() => archiveDialogUser && archiveMutation.mutate(archiveDialogUser.user_id)}
+              disabled={archiveMutation.isPending}
             >
-              {changeRoleMutation.isPending ? "Updating..." : "Change Role"}
+              {archiveMutation.isPending ? "Archiving..." : "Archive User"}
             </Button>
           </DialogFooter>
         </DialogContent>
