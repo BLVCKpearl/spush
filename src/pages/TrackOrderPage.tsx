@@ -30,6 +30,7 @@ import type { OrderStatus } from '@/types/database';
 const statusConfig: Record<OrderStatus, { 
   label: string; 
   description: string;
+  notification?: string;
   icon: React.ElementType; 
   color: string;
   bgColor: string;
@@ -51,6 +52,7 @@ const statusConfig: Record<OrderStatus, {
   cash_on_delivery: { 
     label: 'Pay When Ready', 
     description: 'Your order is being prepared. Please pay when your food arrives.',
+    notification: '👨‍🍳 Your order is in the kitchen!',
     icon: Banknote, 
     color: 'text-blue-600',
     bgColor: 'bg-blue-100'
@@ -58,6 +60,7 @@ const statusConfig: Record<OrderStatus, {
   confirmed: { 
     label: 'Payment Confirmed', 
     description: 'Thank you! Your payment has been confirmed.',
+    notification: '✅ Payment received! Your order will start soon.',
     icon: CheckCircle2, 
     color: 'text-emerald-600',
     bgColor: 'bg-emerald-100'
@@ -65,6 +68,7 @@ const statusConfig: Record<OrderStatus, {
   preparing: { 
     label: 'Preparing Your Order', 
     description: 'Our kitchen is now preparing your delicious meal.',
+    notification: '🍳 Your order is being whipped up by our chefs!',
     icon: ChefHat, 
     color: 'text-orange-600',
     bgColor: 'bg-orange-100'
@@ -72,6 +76,7 @@ const statusConfig: Record<OrderStatus, {
   ready: { 
     label: 'Ready for Pickup', 
     description: 'Your order is ready! It will be served to your table shortly.',
+    notification: '🔔 Your food is ready and on its way!',
     icon: Bell, 
     color: 'text-green-600',
     bgColor: 'bg-green-100'
@@ -79,6 +84,7 @@ const statusConfig: Record<OrderStatus, {
   completed: { 
     label: 'Order Complete', 
     description: 'Enjoy your meal! Thank you for dining with us.',
+    notification: '🍽️ Bon appétit! Enjoy your meal!',
     icon: UtensilsCrossed, 
     color: 'text-muted-foreground',
     bgColor: 'bg-muted'
@@ -197,6 +203,17 @@ export default function TrackOrderPage() {
 
         {order && (
           <>
+            {/* Live Stage Notification - only show for active paid orders */}
+            {order.payment_confirmed && statusConfig[order.status]?.notification && (
+              <Card className="bg-primary/5 border-primary/20 animate-pulse">
+                <CardContent className="p-4">
+                  <p className="text-center text-lg font-medium">
+                    {statusConfig[order.status].notification}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Large Status Indicator */}
             <Card className="overflow-hidden">
               {(() => {
