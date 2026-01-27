@@ -471,7 +471,7 @@ export type Database = {
           {
             foreignKeyName: "payment_confirmations_order_id_fkey"
             columns: ["order_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "orders"
             referencedColumns: ["id"]
           },
@@ -870,6 +870,8 @@ export type Database = {
       is_admin_or_staff: { Args: never; Returns: boolean }
       is_any_tenant_admin: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
+      is_staff_of_tenant: { Args: { _tenant_id: string }; Returns: boolean }
+      is_staff_only: { Args: { _tenant_id: string }; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
       is_tenant_admin: { Args: { _tenant_id: string }; Returns: boolean }
       is_tenant_staff: { Args: { _tenant_id: string }; Returns: boolean }
