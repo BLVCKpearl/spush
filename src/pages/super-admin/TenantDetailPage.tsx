@@ -306,8 +306,33 @@ export default function TenantDetailPage() {
   // Delete tenant permanently
   const deleteTenantMutation = useMutation({
     mutationFn: async () => {
-      // Delete all related data in order (respecting foreign keys)
-      // 1. Delete orders and related data
+      // 1. First, get all users attached to this tenant and delete them via edge function
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("tenant_id", tenantId);
+
+      if (roles && roles.length > 0) {
+        const userIds = [...new Set(roles.map((r) => r.user_id))];
+        
+        // Delete each user via edge function (handles auth.users deletion)
+        for (const userId of userIds) {
+          const { error: deleteUserError } = await supabase.functions.invoke("manage-users", {
+            body: {
+              action: "delete",
+              userId,
+              tenantId,
+            },
+          });
+          
+          if (deleteUserError) {
+            console.error(`Failed to delete user ${userId}:`, deleteUserError);
+            // Continue with other users even if one fails
+          }
+        }
+      }
+
+      // 2. Delete orders and related data
       const { data: orders } = await supabase
         .from("orders")
         .select("id")
@@ -323,42 +348,43 @@ export default function TenantDetailPage() {
         await supabase.from("orders").delete().eq("venue_id", tenantId);
       }
 
-      // 2. Delete menu items and categories
+      // 3. Delete menu items and categories
       await supabase.from("menu_items").delete().eq("venue_id", tenantId);
       await supabase.from("categories").delete().eq("venue_id", tenantId);
 
-      // 3. Delete tables
+      // 4. Delete tables
       await supabase.from("tables").delete().eq("venue_id", tenantId);
 
-      // 4. Delete tenant settings and features
+      // 5. Delete tenant settings and features
       await supabase.from("venue_settings").delete().eq("venue_id", tenantId);
       await supabase.from("tenant_feature_flags").delete().eq("tenant_id", tenantId);
       await supabase.from("bank_details").delete().eq("venue_id", tenantId);
       await supabase.from("staff_invitations").delete().eq("tenant_id", tenantId);
 
-      // 5. Delete user roles for this tenant
+      // 6. Delete any remaining user roles for this tenant (in case some users weren't deleted)
       await supabase.from("user_roles").delete().eq("tenant_id", tenantId);
 
-      // 6. Delete profiles linked to this venue
+      // 7. Delete any remaining profiles linked to this venue
       await supabase.from("profiles").delete().eq("venue_id", tenantId);
 
-      // 7. Delete audit logs for this tenant
+      // 8. Delete audit logs for this tenant
       await supabase.from("admin_audit_logs").delete().eq("tenant_id", tenantId);
 
-      // 8. Finally delete the venue
+      // 9. Finally delete the venue
       const { error } = await supabase.from("venues").delete().eq("id", tenantId);
       if (error) throw error;
 
       if (user) {
         await logAuditEvent(user.id, {
-          action: "tenant_archived",
-          metadata: { tenant_name: tenant?.name, tenant_id: tenantId, action: "deleted" },
+          action: "tenant_deleted",
+          metadata: { tenant_name: tenant?.name, tenant_id: tenantId, users_deleted: roles?.length || 0 },
         });
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["super-admin-tenants"] });
-      toast.success("Tenant deleted permanently");
+      queryClient.invalidateQueries({ queryKey: ["super-admin-all-users"] });
+      toast.success("Tenant and all associated users deleted permanently");
       navigate("/super-admin/tenants");
     },
     onError: (err: Error) => toast.error(err.message),
