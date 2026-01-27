@@ -334,6 +334,7 @@ export default function AllUsersPage() {
   };
 
   const getCurrentRole = (user: UserWithRoles): "tenant_admin" | "staff" | null => {
+    if (!user.roles || user.roles.length === 0) return null;
     const tenantAdminRole = user.roles.find((r) => r.tenant_role === "tenant_admin");
     if (tenantAdminRole) return "tenant_admin";
     const staffRole = user.roles.find((r) => r.tenant_role === "staff");
@@ -348,7 +349,7 @@ export default function AllUsersPage() {
 
   const canChangeRole = (user: UserWithRoles) => {
     // Can only change role for non-super-admin users with a tenant role
-    return canManageUser(user) && user.roles.some(r => r.tenant_role);
+    return canManageUser(user) && user.roles?.some(r => r.tenant_role);
   };
 
   return (
