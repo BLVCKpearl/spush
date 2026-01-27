@@ -13,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, Plus, Shield, Trash2, Loader2, ToggleLeft, Building2, Eye, EyeOff, RefreshCw } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertTriangle, Plus, Shield, Trash2, Loader2, ToggleLeft, Building2, Eye, EyeOff, RefreshCw, MoreHorizontal, KeyRound, Ban, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useTenants } from "@/hooks/useTenantManagement";
 import { useFeatureFlagsAdmin } from "@/hooks/useFeatureFlags";
@@ -48,6 +49,15 @@ export default function SettingsPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+  
+  // Reset password dialog state
+  const [resetPasswordAdmin, setResetPasswordAdmin] = useState<{ id: string; user_id: string; email: string } | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  
+  // Suspend confirmation state
+  const [suspendAdmin, setSuspendAdmin] = useState<{ id: string; user_id: string; email: string } | null>(null);
+  const [reactivateAdmin, setReactivateAdmin] = useState<{ id: string; user_id: string; email: string } | null>(null);
 
   // Fetch super admins
   const { data: superAdmins, isLoading: superAdminsLoading } = useQuery({
@@ -59,7 +69,17 @@ export default function SettingsPage() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data;
+      return data as Array<{
+        id: string;
+        user_id: string;
+        email: string;
+        display_name: string | null;
+        is_suspended: boolean;
+        suspended_at: string | null;
+        suspended_by: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
     },
   });
 
@@ -118,6 +138,80 @@ export default function SettingsPage() {
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to remove super admin");
+    },
+  });
+
+  // Reset password mutation
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
+      const { data, error } = await supabase.functions.invoke("manage-users", {
+        body: {
+          action: "reset_super_admin_password",
+          userId,
+          password,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      setResetPasswordAdmin(null);
+      setResetPasswordValue("");
+      setShowResetPassword(false);
+      toast.success("Password reset successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to reset password");
+    },
+  });
+
+  // Suspend super admin mutation
+  const suspendMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data, error } = await supabase.functions.invoke("manage-users", {
+        body: {
+          action: "suspend_super_admin",
+          userId,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["super-admins"] });
+      setSuspendAdmin(null);
+      toast.success("Super admin suspended");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to suspend super admin");
+    },
+  });
+
+  // Reactivate super admin mutation
+  const reactivateMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data, error } = await supabase.functions.invoke("manage-users", {
+        body: {
+          action: "reactivate_super_admin",
+          userId,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["super-admins"] });
+      setReactivateAdmin(null);
+      toast.success("Super admin reactivated");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to reactivate super admin");
     },
   });
 
@@ -229,27 +323,65 @@ export default function SettingsPage() {
                     </TableRow>
                   ) : (
                     superAdmins?.map((admin) => (
-                      <TableRow key={admin.id}>
+                      <TableRow key={admin.id} className={admin.is_suspended ? "opacity-60" : ""}>
                         <TableCell className="font-medium">
-                          {admin.display_name || "—"}
-                          {admin.user_id === user?.id && (
-                            <Badge variant="secondary" className="ml-2">You</Badge>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {admin.display_name || "—"}
+                            {admin.user_id === user?.id && (
+                              <Badge variant="secondary">You</Badge>
+                            )}
+                            {admin.is_suspended && (
+                              <Badge variant="destructive">Suspended</Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>{admin.email}</TableCell>
                         <TableCell>
                           {new Date(admin.created_at).toLocaleDateString()}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => setDeleteConfirmId(admin.id)}
-                            disabled={admin.user_id === user?.id}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" disabled={admin.user_id === user?.id}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setResetPasswordAdmin({ id: admin.id, user_id: admin.user_id, email: admin.email });
+                                  setResetPasswordValue("");
+                                  setShowResetPassword(false);
+                                }}
+                              >
+                                <KeyRound className="h-4 w-4 mr-2" />
+                                Reset Password
+                              </DropdownMenuItem>
+                              {admin.is_suspended ? (
+                                <DropdownMenuItem
+                                  onClick={() => setReactivateAdmin({ id: admin.id, user_id: admin.user_id, email: admin.email })}
+                                >
+                                  <UserCheck className="h-4 w-4 mr-2" />
+                                  Reactivate
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onClick={() => setSuspendAdmin({ id: admin.id, user_id: admin.user_id, email: admin.email })}
+                                  className="text-destructive"
+                                >
+                                  <Ban className="h-4 w-4 mr-2" />
+                                  Suspend
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                onClick={() => setDeleteConfirmId(admin.id)}
+                                className="text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Remove
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     ))
@@ -442,6 +574,142 @@ export default function SettingsPage() {
               disabled={removeSuperAdminMutation.isPending}
             >
               {removeSuperAdminMutation.isPending ? "Removing..." : "Remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={!!resetPasswordAdmin} onOpenChange={(open) => {
+        if (!open) {
+          setResetPasswordAdmin(null);
+          setResetPasswordValue("");
+          setShowResetPassword(false);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5" />
+              Reset Password
+            </DialogTitle>
+            <DialogDescription>
+              Set a new password for <strong>{resetPasswordAdmin?.email}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="resetPassword">New Password</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="resetPassword"
+                    type={showResetPassword ? "text" : "password"}
+                    placeholder="Min 6 characters"
+                    value={resetPasswordValue}
+                    onChange={(e) => setResetPasswordValue(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowResetPassword(!showResetPassword)}
+                  >
+                    {showResetPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    setResetPasswordValue(generateSecurePassword());
+                    setShowResetPassword(true);
+                  }}
+                  title="Generate password"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Share this password securely with the admin.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetPasswordAdmin(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!resetPasswordAdmin || !resetPasswordValue || resetPasswordValue.length < 6) {
+                  toast.error("Password must be at least 6 characters");
+                  return;
+                }
+                resetPasswordMutation.mutate({
+                  userId: resetPasswordAdmin.user_id,
+                  password: resetPasswordValue,
+                });
+              }}
+              disabled={resetPasswordMutation.isPending}
+            >
+              {resetPasswordMutation.isPending ? "Resetting..." : "Reset Password"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Suspend Confirmation Dialog */}
+      <Dialog open={!!suspendAdmin} onOpenChange={() => setSuspendAdmin(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Ban className="h-5 w-5" />
+              Suspend Super Admin
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to suspend <strong>{suspendAdmin?.email}</strong>?
+              They will be unable to log in until reactivated.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSuspendAdmin(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => suspendAdmin && suspendMutation.mutate(suspendAdmin.user_id)}
+              disabled={suspendMutation.isPending}
+            >
+              {suspendMutation.isPending ? "Suspending..." : "Suspend"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reactivate Confirmation Dialog */}
+      <Dialog open={!!reactivateAdmin} onOpenChange={() => setReactivateAdmin(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5" />
+              Reactivate Super Admin
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to reactivate <strong>{reactivateAdmin?.email}</strong>?
+              They will regain full super admin access.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReactivateAdmin(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => reactivateAdmin && reactivateMutation.mutate(reactivateAdmin.user_id)}
+              disabled={reactivateMutation.isPending}
+            >
+              {reactivateMutation.isPending ? "Reactivating..." : "Reactivate"}
             </Button>
           </DialogFooter>
         </DialogContent>

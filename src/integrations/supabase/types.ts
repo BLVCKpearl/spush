@@ -618,6 +618,9 @@ export type Database = {
           display_name: string | null
           email: string
           id: string
+          is_suspended: boolean
+          suspended_at: string | null
+          suspended_by: string | null
           updated_at: string
           user_id: string
         }
@@ -626,6 +629,9 @@ export type Database = {
           display_name?: string | null
           email: string
           id?: string
+          is_suspended?: boolean
+          suspended_at?: string | null
+          suspended_by?: string | null
           updated_at?: string
           user_id: string
         }
@@ -634,6 +640,9 @@ export type Database = {
           display_name?: string | null
           email?: string
           id?: string
+          is_suspended?: boolean
+          suspended_at?: string | null
+          suspended_by?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -855,6 +864,7 @@ export type Database = {
         Returns: boolean
       }
       count_active_admins: { Args: never; Returns: number }
+      count_active_super_admins: { Args: never; Returns: number }
       count_active_tenant_admins: {
         Args: { _tenant_id: string }
         Returns: number

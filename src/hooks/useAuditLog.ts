@@ -26,6 +26,8 @@ export type AuditAction =
   | 'tenant_archived'
   | 'tenant_deleted'
   | 'super_admin_created'
+  | 'super_admin_suspended'
+  | 'super_admin_reactivated'
   | 'feature_flag_changed'
   | 'invalid_role_access_attempt';
 
