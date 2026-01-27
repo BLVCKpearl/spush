@@ -32,6 +32,7 @@ import {
   CheckCircle,
   Loader2,
   ChevronRight,
+  ShieldOff,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -80,7 +81,15 @@ export default function TenantsPage() {
     setNewTenantSlug(slug);
   };
 
-  const getStatusBadge = (tenant: ManagedTenant) => {
+  const getStatusBadge = (tenant: ManagedTenant & { is_active?: boolean }) => {
+    if (!(tenant as any).is_active) {
+      return (
+        <Badge variant="secondary" className="gap-1">
+          <ShieldOff className="h-3 w-3" />
+          Inactive
+        </Badge>
+      );
+    }
     if (tenant.is_suspended) {
       return (
         <Badge variant="destructive" className="gap-1">
@@ -215,7 +224,7 @@ export default function TenantsPage() {
                 filteredTenants?.map((tenant) => (
                   <TableRow 
                     key={tenant.id} 
-                    className={`cursor-pointer hover:bg-muted/50 ${tenant.is_suspended ? 'opacity-60' : ''}`}
+                    className={`cursor-pointer hover:bg-muted/50 ${tenant.is_suspended || !(tenant as any).is_active ? 'opacity-60' : ''}`}
                     onClick={() => navigate(`/super-admin/tenants/${tenant.id}`)}
                   >
                     <TableCell className="font-medium">{tenant.name}</TableCell>

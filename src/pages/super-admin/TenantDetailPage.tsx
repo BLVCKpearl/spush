@@ -40,6 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import {
   ArrowLeft,
   Building2,
@@ -54,9 +55,11 @@ import {
   LogOut,
   Loader2,
   Search,
-  Archive,
+  Trash2,
   Play,
   Pause,
+  ShieldOff,
+  AlertTriangle,
 } from "lucide-react";
 import { formatNaira } from "@/lib/currency";
 import { formatDistanceToNow } from "date-fns";
@@ -71,6 +74,10 @@ export default function TenantDetailPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [revokeDialogOpen, setRevokeDialogOpen] = useState(false);
+  const [forceLogoutDialogOpen, setForceLogoutDialogOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [resetPasswordUser, setResetPasswordUser] = useState<{
     id: string;
     email: string;
@@ -299,23 +306,150 @@ export default function TenantDetailPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // Force logout all users
+  // Force logout all users - deactivates all users forcing re-auth
   const forceLogoutMutation = useMutation({
     mutationFn: async () => {
-      // In production, you'd call an edge function to invalidate all sessions
-      // For now, we log the action
+      // Get all users for this tenant
+      const userIds = users?.map((u) => u.id) || [];
+      
+      if (userIds.length > 0) {
+        // Temporarily deactivate and reactivate all users to invalidate sessions
+        // This forces all users to re-authenticate
+        const { error } = await supabase
+          .from("profiles")
+          .update({ must_change_password: true })
+          .in("user_id", userIds);
+        
+        if (error) throw error;
+      }
+
       if (user) {
         await logAuditEvent(user.id, {
           action: "tenant_force_logout",
           tenantId: tenantId,
-          metadata: { tenant_name: tenant?.name },
+          metadata: { tenant_name: tenant?.name, affected_users: userIds.length },
         });
       }
     },
     onSuccess: () => {
-      toast.success("Force logout triggered (sessions will be invalidated)");
+      queryClient.invalidateQueries({ queryKey: ["super-admin-tenant-users", tenantId] });
+      toast.success("Force logout triggered - all users will need to re-authenticate");
+      setForceLogoutDialogOpen(false);
       setManageDialogOpen(false);
     },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Revoke tenant access - marks tenant as inactive and deactivates all users
+  const revokeAccessMutation = useMutation({
+    mutationFn: async () => {
+      // Deactivate all users
+      const userIds = users?.map((u) => u.id) || [];
+      
+      if (userIds.length > 0) {
+        const { error: usersError } = await supabase
+          .from("profiles")
+          .update({ is_active: false })
+          .in("user_id", userIds);
+        
+        if (usersError) throw usersError;
+      }
+
+      // Mark tenant as inactive
+      const { error: tenantError } = await supabase
+        .from("venues")
+        .update({
+          is_active: false,
+          is_suspended: true,
+          suspended_at: new Date().toISOString(),
+          suspended_by: user?.id,
+        })
+        .eq("id", tenantId);
+
+      if (tenantError) throw tenantError;
+
+      if (user) {
+        await logAuditEvent(user.id, {
+          action: "tenant_suspended",
+          tenantId: tenantId,
+          metadata: { 
+            tenant_name: tenant?.name, 
+            reason: "access_revoked",
+            affected_users: userIds.length,
+          },
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["super-admin-tenant-detail", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["super-admin-tenant-users", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["super-admin-tenants"] });
+      toast.success("Tenant access revoked - marked as inactive");
+      setRevokeDialogOpen(false);
+      setManageDialogOpen(false);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Delete tenant permanently
+  const deleteTenantMutation = useMutation({
+    mutationFn: async () => {
+      // Delete all related data in order (respecting foreign keys)
+      // 1. Delete orders and related data
+      const { data: orders } = await supabase
+        .from("orders")
+        .select("id")
+        .eq("venue_id", tenantId);
+
+      if (orders && orders.length > 0) {
+        const orderIds = orders.map((o) => o.id);
+        await supabase.from("order_items").delete().in("order_id", orderIds);
+        await supabase.from("order_events").delete().in("order_id", orderIds);
+        await supabase.from("payment_claims").delete().in("order_id", orderIds);
+        await supabase.from("payment_confirmations").delete().in("order_id", orderIds);
+        await supabase.from("payment_proofs").delete().in("order_id", orderIds);
+        await supabase.from("orders").delete().eq("venue_id", tenantId);
+      }
+
+      // 2. Delete menu items and categories
+      await supabase.from("menu_items").delete().eq("venue_id", tenantId);
+      await supabase.from("categories").delete().eq("venue_id", tenantId);
+
+      // 3. Delete tables
+      await supabase.from("tables").delete().eq("venue_id", tenantId);
+
+      // 4. Delete tenant settings and features
+      await supabase.from("venue_settings").delete().eq("venue_id", tenantId);
+      await supabase.from("tenant_feature_flags").delete().eq("tenant_id", tenantId);
+      await supabase.from("bank_details").delete().eq("venue_id", tenantId);
+      await supabase.from("staff_invitations").delete().eq("tenant_id", tenantId);
+
+      // 5. Delete user roles for this tenant
+      await supabase.from("user_roles").delete().eq("tenant_id", tenantId);
+
+      // 6. Delete profiles linked to this venue
+      await supabase.from("profiles").delete().eq("venue_id", tenantId);
+
+      // 7. Delete audit logs for this tenant
+      await supabase.from("admin_audit_logs").delete().eq("tenant_id", tenantId);
+
+      // 8. Finally delete the venue
+      const { error } = await supabase.from("venues").delete().eq("id", tenantId);
+      if (error) throw error;
+
+      if (user) {
+        await logAuditEvent(user.id, {
+          action: "tenant_archived",
+          metadata: { tenant_name: tenant?.name, tenant_id: tenantId, action: "deleted" },
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["super-admin-tenants"] });
+      toast.success("Tenant deleted permanently");
+      navigate("/super-admin/tenants");
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const handleImpersonate = async () => {
@@ -367,6 +501,12 @@ export default function TenantDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {!(tenant as any).is_active && (
+            <Badge variant="secondary" className="gap-1">
+              <ShieldOff className="h-3 w-3" />
+              Inactive
+            </Badge>
+          )}
           <Badge
             variant={tenant.is_suspended ? "destructive" : "outline"}
             className={!tenant.is_suspended ? "text-primary border-primary/30" : ""}
@@ -381,7 +521,7 @@ export default function TenantDetailPage() {
               </>
             )}
           </Badge>
-          <Button onClick={handleImpersonate}>
+          <Button onClick={handleImpersonate} disabled={!(tenant as any).is_active}>
             <UserCog className="h-4 w-4 mr-2" /> Impersonate
           </Button>
           <Button variant="outline" onClick={() => setManageDialogOpen(true)}>
@@ -558,7 +698,7 @@ export default function TenantDetailPage() {
                 className="w-full justify-start"
                 variant="outline"
                 onClick={() => suspendMutation.mutate(false)}
-                disabled={suspendMutation.isPending}
+                disabled={suspendMutation.isPending || !(tenant as any).is_active}
               >
                 <Play className="h-4 w-4 mr-2" /> Resume Tenant
               </Button>
@@ -575,18 +715,144 @@ export default function TenantDetailPage() {
             <Button
               className="w-full justify-start"
               variant="outline"
-              onClick={() => forceLogoutMutation.mutate()}
-              disabled={forceLogoutMutation.isPending}
+              onClick={() => setForceLogoutDialogOpen(true)}
+              disabled={!(tenant as any).is_active}
             >
               <LogOut className="h-4 w-4 mr-2" /> Force Logout All Users
             </Button>
-            <Button className="w-full justify-start text-muted-foreground" variant="outline" disabled>
-              <Archive className="h-4 w-4 mr-2" /> Archive Tenant (Coming Soon)
+            <Button 
+              className="w-full justify-start text-destructive hover:text-destructive" 
+              variant="outline"
+              onClick={() => setRevokeDialogOpen(true)}
+              disabled={!(tenant as any).is_active}
+            >
+              <ShieldOff className="h-4 w-4 mr-2" /> Revoke Tenant Access
+            </Button>
+            <Button 
+              className="w-full justify-start text-destructive hover:text-destructive" 
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-2" /> Delete Tenant
             </Button>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setManageDialogOpen(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Force Logout Confirmation Dialog */}
+      <Dialog open={forceLogoutDialogOpen} onOpenChange={setForceLogoutDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <LogOut className="h-5 w-5" /> Force Logout All Users
+            </DialogTitle>
+            <DialogDescription>
+              This will force all {users?.length || 0} users to re-authenticate.
+              They will be required to log in again.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setForceLogoutDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => forceLogoutMutation.mutate()}
+              disabled={forceLogoutMutation.isPending}
+            >
+              {forceLogoutMutation.isPending ? "Processing..." : "Force Logout"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Revoke Access Confirmation Dialog */}
+      <Dialog open={revokeDialogOpen} onOpenChange={setRevokeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <ShieldOff className="h-5 w-5" /> Revoke Tenant Access
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently revoke access for all users and mark the tenant as <strong>inactive</strong>.
+              All {users?.length || 0} users will be deactivated.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 p-4 bg-destructive/10 rounded-md border border-destructive/20">
+            <p className="text-sm text-destructive font-medium flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              This action cannot be easily undone
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRevokeDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => revokeAccessMutation.mutate()}
+              disabled={revokeAccessMutation.isPending}
+            >
+              {revokeAccessMutation.isPending ? "Revoking..." : "Revoke Access"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Tenant Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
+        setDeleteDialogOpen(open);
+        if (!open) setDeleteConfirmText("");
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" /> Delete Tenant Permanently
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently delete "{tenant.name}" and all associated data including:
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1 py-2">
+            <li>All orders and payment records</li>
+            <li>Menu items and categories</li>
+            <li>Tables and QR codes</li>
+            <li>All user accounts and roles</li>
+            <li>Settings and configurations</li>
+          </ul>
+          <div className="py-2 p-4 bg-destructive/10 rounded-md border border-destructive/20">
+            <p className="text-sm text-destructive font-medium flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              This action is irreversible!
+            </p>
+          </div>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="delete-confirm">Type DELETE to confirm</Label>
+            <Input
+              id="delete-confirm"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setDeleteDialogOpen(false);
+              setDeleteConfirmText("");
+            }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteTenantMutation.mutate()}
+              disabled={deleteConfirmText !== "DELETE" || deleteTenantMutation.isPending}
+            >
+              {deleteTenantMutation.isPending ? "Deleting..." : "Delete Tenant"}
             </Button>
           </DialogFooter>
         </DialogContent>
