@@ -50,7 +50,7 @@ interface UserWithRoles {
   is_super_admin: boolean;
 }
 
-type RoleFilter = "all" | "super_admin" | "tenant_admin" | "staff";
+type RoleFilter = "all" | "tenant_admin" | "staff";
 type StatusFilter = "all" | "active" | "inactive";
 
 export default function AllUsersPage() {
@@ -391,8 +391,11 @@ export default function AllUsersPage() {
     },
   });
 
-  // Filter users
+  // Filter users - exclude super admins (they are managed in Settings)
   const filteredUsers = users?.filter((user) => {
+    // Exclude super admins from this list entirely
+    if (user.is_super_admin) return false;
+
     // Search filter
     const matchesSearch = 
       user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -403,7 +406,6 @@ export default function AllUsersPage() {
 
     // Role filter
     if (roleFilter !== "all") {
-      if (roleFilter === "super_admin" && !user.is_super_admin) return false;
       if (roleFilter === "tenant_admin" && !user.roles?.some((r) => r.tenant_role === "tenant_admin")) return false;
       if (roleFilter === "staff" && !user.roles?.some((r) => r.tenant_role === "staff" || r.role === "staff")) return false;
     }
@@ -480,28 +482,20 @@ export default function AllUsersPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <PageTitle title="All Users" subtitle="View and manage users across all tenants" />
+      <PageTitle title="Tenant Users" subtitle="View and manage tenant admins and staff across all tenants" />
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{users?.length || 0}</div>
+            <div className="text-2xl font-bold">{filteredUsers?.length || 0}</div>
             <p className="text-sm text-muted-foreground">Total Users</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold">
-              {users?.filter((u) => u.is_super_admin).length || 0}
-            </div>
-            <p className="text-sm text-muted-foreground">Super Admins</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">
-              {users?.filter((u) => u.roles?.some((r) => r.tenant_role === "tenant_admin")).length || 0}
+              {users?.filter((u) => !u.is_super_admin && u.roles?.some((r) => r.tenant_role === "tenant_admin")).length || 0}
             </div>
             <p className="text-sm text-muted-foreground">Tenant Admins</p>
           </CardContent>
@@ -509,7 +503,7 @@ export default function AllUsersPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold">
-              {users?.filter((u) => u.is_active).length || 0}
+              {users?.filter((u) => !u.is_super_admin && u.is_active).length || 0}
             </div>
             <p className="text-sm text-muted-foreground">Active Users</p>
           </CardContent>
@@ -534,7 +528,6 @@ export default function AllUsersPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Roles</SelectItem>
-            <SelectItem value="super_admin">Super Admin</SelectItem>
             <SelectItem value="tenant_admin">Tenant Admin</SelectItem>
             <SelectItem value="staff">Staff</SelectItem>
           </SelectContent>

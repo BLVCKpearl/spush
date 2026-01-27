@@ -75,7 +75,6 @@ export default function TenantDetailPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [revokeDialogOpen, setRevokeDialogOpen] = useState(false);
   const [forceLogoutDialogOpen, setForceLogoutDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [resetPasswordUser, setResetPasswordUser] = useState<{
@@ -335,57 +334,6 @@ export default function TenantDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["super-admin-tenant-users", tenantId] });
       toast.success("Force logout triggered - all users will need to re-authenticate");
       setForceLogoutDialogOpen(false);
-      setManageDialogOpen(false);
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  // Revoke tenant access - marks tenant as inactive and deactivates all users
-  const revokeAccessMutation = useMutation({
-    mutationFn: async () => {
-      // Deactivate all users
-      const userIds = users?.map((u) => u.id) || [];
-      
-      if (userIds.length > 0) {
-        const { error: usersError } = await supabase
-          .from("profiles")
-          .update({ is_active: false })
-          .in("user_id", userIds);
-        
-        if (usersError) throw usersError;
-      }
-
-      // Mark tenant as inactive
-      const { error: tenantError } = await supabase
-        .from("venues")
-        .update({
-          is_active: false,
-          is_suspended: true,
-          suspended_at: new Date().toISOString(),
-          suspended_by: user?.id,
-        })
-        .eq("id", tenantId);
-
-      if (tenantError) throw tenantError;
-
-      if (user) {
-        await logAuditEvent(user.id, {
-          action: "tenant_suspended",
-          tenantId: tenantId,
-          metadata: { 
-            tenant_name: tenant?.name, 
-            reason: "access_revoked",
-            affected_users: userIds.length,
-          },
-        });
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["super-admin-tenant-detail", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["super-admin-tenant-users", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["super-admin-tenants"] });
-      toast.success("Tenant access revoked - marked as inactive");
-      setRevokeDialogOpen(false);
       setManageDialogOpen(false);
     },
     onError: (err: Error) => toast.error(err.message),
@@ -723,14 +671,6 @@ export default function TenantDetailPage() {
             <Button 
               className="w-full justify-start text-destructive hover:text-destructive" 
               variant="outline"
-              onClick={() => setRevokeDialogOpen(true)}
-              disabled={!(tenant as any).is_active}
-            >
-              <ShieldOff className="h-4 w-4 mr-2" /> Revoke Tenant Access
-            </Button>
-            <Button 
-              className="w-full justify-start text-destructive hover:text-destructive" 
-              variant="outline"
               onClick={() => setDeleteDialogOpen(true)}
             >
               <Trash2 className="h-4 w-4 mr-2" /> Delete Tenant
@@ -771,38 +711,6 @@ export default function TenantDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Revoke Access Confirmation Dialog */}
-      <Dialog open={revokeDialogOpen} onOpenChange={setRevokeDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <ShieldOff className="h-5 w-5" /> Revoke Tenant Access
-            </DialogTitle>
-            <DialogDescription>
-              This will permanently revoke access for all users and mark the tenant as <strong>inactive</strong>.
-              All {users?.length || 0} users will be deactivated.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 p-4 bg-destructive/10 rounded-md border border-destructive/20">
-            <p className="text-sm text-destructive font-medium flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              This action cannot be easily undone
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRevokeDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => revokeAccessMutation.mutate()}
-              disabled={revokeAccessMutation.isPending}
-            >
-              {revokeAccessMutation.isPending ? "Revoking..." : "Revoke Access"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Tenant Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
