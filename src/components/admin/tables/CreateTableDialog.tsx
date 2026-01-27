@@ -15,31 +15,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
-import { useVenues } from '@/hooks/useVenues';
 import type { TableWithVenue } from '@/hooks/useTables';
 
 const singleSchema = z.object({
-  venue_id: z.string().min(1, 'Please select a venue'),
+  venue_id: z.string().min(1, 'Venue is required'),
   label: z.string().min(1, 'Label is required').max(50, 'Label too long'),
 });
 
 const bulkNumberSchema = z.object({
-  venue_id: z.string().min(1, 'Please select a venue'),
+  venue_id: z.string().min(1, 'Venue is required'),
   prefix: z.string().max(20, 'Prefix too long'),
   start: z.coerce.number().int().min(1, 'Start must be at least 1'),
   count: z.coerce.number().int().min(1, 'Count must be at least 1').max(100, 'Max 100 tables'),
 });
 
 const bulkListSchema = z.object({
-  venue_id: z.string().min(1, 'Please select a venue'),
+  venue_id: z.string().min(1, 'Venue is required'),
   labels: z.string().min(1, 'Please enter at least one label'),
 });
 
@@ -51,6 +43,8 @@ interface CreateTableDialogProps {
   isLoading: boolean;
   existingTables?: TableWithVenue[];
   defaultVenueId?: string;
+  /** When true, hides the venue selector (for single-venue tenants) */
+  hideVenueSelector?: boolean;
 }
 
 // Helper to extract number suffix from a label given a prefix
@@ -84,9 +78,9 @@ export function CreateTableDialog({
   isLoading,
   existingTables = [],
   defaultVenueId,
+  hideVenueSelector = false,
 }: CreateTableDialogProps) {
   const [tab, setTab] = useState<'single' | 'bulk-number' | 'bulk-list'>('single');
-  const { data: venues, isLoading: venuesLoading } = useVenues();
 
   const singleForm = useForm({
     resolver: zodResolver(singleSchema),
@@ -103,6 +97,15 @@ export function CreateTableDialog({
     defaultValues: { venue_id: defaultVenueId || '', labels: '' },
   });
 
+  // Update venue_id when defaultVenueId changes
+  useEffect(() => {
+    if (defaultVenueId) {
+      singleForm.setValue('venue_id', defaultVenueId);
+      bulkNumberForm.setValue('venue_id', defaultVenueId);
+      bulkListForm.setValue('venue_id', defaultVenueId);
+    }
+  }, [defaultVenueId, singleForm, bulkNumberForm, bulkListForm]);
+
   // Watch venue and prefix to auto-adjust start number
   const bulkVenueId = bulkNumberForm.watch('venue_id');
   const bulkPrefix = bulkNumberForm.watch('prefix');
@@ -117,7 +120,7 @@ export function CreateTableDialog({
 
   const handleSingleSubmit = async (values: z.infer<typeof singleSchema>) => {
     await onCreateSingle({ venue_id: values.venue_id, label: values.label });
-    singleForm.reset();
+    singleForm.reset({ venue_id: defaultVenueId || '', label: '' });
     onOpenChange(false);
   };
 
@@ -127,7 +130,7 @@ export function CreateTableDialog({
       (_, i) => `${data.prefix}${data.start + i}`
     );
     await onCreateBulk({ venue_id: data.venue_id, labels });
-    bulkNumberForm.reset();
+    bulkNumberForm.reset({ venue_id: defaultVenueId || '', prefix: 'Table ', start: 1, count: 10 });
     onOpenChange(false);
   };
 
@@ -138,30 +141,18 @@ export function CreateTableDialog({
       .filter((l) => l.length > 0);
     if (labels.length === 0) return;
     await onCreateBulk({ venue_id: data.venue_id, labels });
-    bulkListForm.reset();
+    bulkListForm.reset({ venue_id: defaultVenueId || '', labels: '' });
     onOpenChange(false);
   };
-
-  const VenueSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
-    <Select value={value} onValueChange={onChange} disabled={venuesLoading}>
-      <SelectTrigger>
-        <SelectValue placeholder="Select venue" />
-      </SelectTrigger>
-      <SelectContent>
-        {venues?.map((venue) => (
-          <SelectItem key={venue.id} value={venue.id}>
-            {venue.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Create Tables</DialogTitle>
+          <DialogDescription>
+            Add tables for your venue. Each table gets a unique QR code for ordering.
+          </DialogDescription>
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
@@ -173,18 +164,9 @@ export function CreateTableDialog({
 
           <TabsContent value="single" className="space-y-4 mt-4">
             <form onSubmit={singleForm.handleSubmit(handleSingleSubmit)} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Venue</Label>
-                <VenueSelect
-                  value={singleForm.watch('venue_id')}
-                  onChange={(v) => singleForm.setValue('venue_id', v)}
-                />
-                {singleForm.formState.errors.venue_id && (
-                  <p className="text-sm text-destructive">
-                    {singleForm.formState.errors.venue_id.message}
-                  </p>
-                )}
-              </div>
+              {/* Hidden venue_id field when hideVenueSelector is true */}
+              <input type="hidden" {...singleForm.register('venue_id')} />
+              
               <div className="space-y-2">
                 <Label>Table Label</Label>
                 <Input
@@ -208,18 +190,9 @@ export function CreateTableDialog({
 
           <TabsContent value="bulk-number" className="space-y-4 mt-4">
             <form onSubmit={bulkNumberForm.handleSubmit(handleBulkNumberSubmit)} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Venue</Label>
-                <VenueSelect
-                  value={bulkNumberForm.watch('venue_id')}
-                  onChange={(v) => bulkNumberForm.setValue('venue_id', v)}
-                />
-                {bulkNumberForm.formState.errors.venue_id && (
-                  <p className="text-sm text-destructive">
-                    {bulkNumberForm.formState.errors.venue_id.message}
-                  </p>
-                )}
-              </div>
+              {/* Hidden venue_id field */}
+              <input type="hidden" {...bulkNumberForm.register('venue_id')} />
+              
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Prefix</Label>
@@ -269,13 +242,9 @@ export function CreateTableDialog({
 
           <TabsContent value="bulk-list" className="space-y-4 mt-4">
             <form onSubmit={bulkListForm.handleSubmit(handleBulkListSubmit)} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Venue</Label>
-                <VenueSelect
-                  value={bulkListForm.watch('venue_id')}
-                  onChange={(v) => bulkListForm.setValue('venue_id', v)}
-                />
-              </div>
+              {/* Hidden venue_id field */}
+              <input type="hidden" {...bulkListForm.register('venue_id')} />
+              
               <div className="space-y-2">
                 <Label>Table Labels (one per line)</Label>
                 <Textarea

@@ -5,7 +5,7 @@ import { useTenant } from '@/contexts/TenantContext';
  * Throws if tenant scope is required but not available
  */
 export function useTenantId(): string {
-  const { tenantId, isSuperAdmin, requiresTenantScope } = useTenant();
+  const { tenantId, requiresTenantScope } = useTenant();
   
   if (requiresTenantScope && !tenantId) {
     throw new Error('Tenant context is required but not available');
@@ -48,4 +48,30 @@ export function useRequireTenantAccess(targetTenantId: string | null | undefined
   if (targetTenantId && !canAccess) {
     throw new Error('Access denied: You do not have permission to access this tenant\'s data');
   }
+}
+
+/**
+ * Hook to validate and get a safe tenant ID for mutations
+ * During impersonation, returns the impersonated tenant ID
+ * Validates cross-tenant mutations are rejected
+ */
+export function useSafeTenantMutation() {
+  const { tenantId, validateTenantMutation, logImpersonationAction, isImpersonating } = useTenant();
+  
+  return {
+    /** The current effective tenant ID */
+    tenantId,
+    
+    /** Validate that a mutation targets the correct tenant */
+    validateMutation: (targetTenantId: string | null | undefined) => {
+      validateTenantMutation(targetTenantId);
+    },
+    
+    /** Log an action for audit purposes (only logs during impersonation) */
+    logAction: async (action: string, metadata?: Record<string, unknown>) => {
+      if (isImpersonating) {
+        await logImpersonationAction(action, metadata);
+      }
+    },
+  };
 }
