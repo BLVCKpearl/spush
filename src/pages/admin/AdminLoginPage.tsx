@@ -66,6 +66,11 @@ export default function AdminLoginPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!businessName.trim()) {
+      toast.error('Please enter your venue/restaurant name');
+      return;
+    }
+    
     if (!email || !password) {
       toast.error('Please enter email and password');
       return;
@@ -78,12 +83,12 @@ export default function AdminLoginPage() {
 
     setIsLoading(true);
     try {
-      const { error } = await signUp(email, password, businessName);
+      const { error } = await signUp(email, password, businessName.trim());
       if (error) {
         const errorMessage = error instanceof Error ? error.message : 'Signup failed';
         toast.error(errorMessage);
       } else {
-        toast.success('Account created! Setting up your venue...');
+        toast.success('Account created! Setting up your venue: ' + businessName.trim());
         // The user will be auto-logged in and redirected to onboarding
       }
     } catch {
@@ -154,7 +159,7 @@ export default function AdminLoginPage() {
             <TabsContent value="signup">
               <form onSubmit={handleSignup} className="space-y-4 mt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="business-name">Business Name (optional)</Label>
+                  <Label htmlFor="business-name">Venue / Restaurant Name *</Label>
                   <Input
                     id="business-name"
                     type="text"
@@ -162,7 +167,11 @@ export default function AdminLoginPage() {
                     value={businessName}
                     onChange={(e) => setBusinessName(e.target.value)}
                     disabled={isLoading}
+                    required
                   />
+                  <p className="text-xs text-muted-foreground">
+                    This will be your venue's display name (you can change it later)
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>

@@ -137,12 +137,16 @@ serve(async (req) => {
       );
     }
 
-    // Create new user
+    // Create new user - include is_staff_creation flag to prevent venue auto-creation
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: invitedEmail,
       password: password,
       email_confirm: true,
-      user_metadata: { full_name: fullName },
+      user_metadata: { 
+        full_name: fullName,
+        is_staff_creation: true,
+        tenant_id: tenant_id,
+      },
     });
 
     if (createError || !newUser?.user) {
