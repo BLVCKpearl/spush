@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '@/components/admin/AdminLayout';
-import { useCategories, useAllMenuItems } from '@/hooks/useMenu';
+import { useTenantCategories, useTenantMenuItems } from '@/hooks/useMenu';
+import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
 import { nairaToKobo, koboToNaira } from '@/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,8 +36,9 @@ import type { Category, MenuItem } from '@/types/database';
 
 export default function AdminMenuPage() {
   const queryClient = useQueryClient();
-  const { data: categories, isLoading: categoriesLoading } = useCategories();
-  const { data: menuItems, isLoading: menuLoading } = useAllMenuItems();
+  const { tenantId } = useTenant();
+  const { data: categories, isLoading: categoriesLoading } = useTenantCategories(tenantId);
+  const { data: menuItems, isLoading: menuLoading } = useTenantMenuItems(tenantId);
 
   const [activeTab, setActiveTab] = useState('manage');
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
@@ -47,10 +49,11 @@ export default function AdminMenuPage() {
   // Category mutations
   const createCategory = useMutation({
     mutationFn: async (name: string) => {
+      if (!tenantId) throw new Error('No tenant selected');
       const maxOrder = categories?.reduce((max, c) => Math.max(max, c.display_order), 0) || 0;
       const { error } = await supabase
         .from('categories')
-        .insert({ name, display_order: maxOrder + 1 });
+        .insert({ name, display_order: maxOrder + 1, venue_id: tenantId });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -58,7 +61,7 @@ export default function AdminMenuPage() {
       toast.success('Category created');
       setCategoryDialogOpen(false);
     },
-    onError: () => toast.error('Failed to create category'),
+    onError: (err) => toast.error(`Failed to create category: ${err.message}`),
   });
 
   const updateCategory = useMutation({
@@ -100,23 +103,24 @@ export default function AdminMenuPage() {
       description: string;
       price_kobo: number;
     }) => {
+      if (!tenantId) throw new Error('No tenant selected');
       const categoryItems = menuItems?.filter(i => i.category_id === data.category_id) || [];
       const maxOrder = categoryItems.reduce((max, i) => Math.max(max, i.sort_order), 0);
       
       const { error } = await supabase.from('menu_items').insert({
         ...data,
+        venue_id: tenantId,
         sort_order: maxOrder + 1,
       });
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['all-menu-items'] });
       queryClient.invalidateQueries({ queryKey: ['menu-items'] });
       queryClient.invalidateQueries({ queryKey: ['venue-menu-items'] });
       toast.success('Menu item created');
       setItemDialogOpen(false);
     },
-    onError: () => toast.error('Failed to create menu item'),
+    onError: (err) => toast.error(`Failed to create menu item: ${err.message}`),
   });
 
   const updateMenuItem = useMutation({
