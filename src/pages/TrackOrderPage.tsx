@@ -222,7 +222,7 @@ export default function TrackOrderPage() {
                       </div>
                       <div className="flex justify-between items-center text-sm mt-2">
                         <span className="text-muted-foreground">Table</span>
-                        <span className="font-medium">Table {order.table_number}</span>
+                        <span className="font-medium">{order.table_label || `Table ${order.table_number}`}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm mt-2">
                         <span className="text-muted-foreground">Payment Method</span>

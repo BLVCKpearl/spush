@@ -292,6 +292,7 @@ export type Database = {
           payment_method: Database["public"]["Enums"]["payment_method"]
           status: Database["public"]["Enums"]["order_status"]
           table_id: string | null
+          table_label: string | null
           table_number: number
           total_kobo: number
           updated_at: string
@@ -308,6 +309,7 @@ export type Database = {
           payment_method: Database["public"]["Enums"]["payment_method"]
           status?: Database["public"]["Enums"]["order_status"]
           table_id?: string | null
+          table_label?: string | null
           table_number: number
           total_kobo?: number
           updated_at?: string
@@ -324,6 +326,7 @@ export type Database = {
           payment_method?: Database["public"]["Enums"]["payment_method"]
           status?: Database["public"]["Enums"]["order_status"]
           table_id?: string | null
+          table_label?: string | null
           table_number?: number
           total_kobo?: number
           updated_at?: string

@@ -156,14 +156,14 @@ export default function OrderQueueCard({
           {/* Table and Reference Row */}
           <div className="flex items-baseline justify-between gap-2">
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold">T{order.table_number}</span>
+              <span className="text-2xl font-bold">{order.table_label || `T${order.table_number}`}</span>
               <span className="text-sm text-muted-foreground font-mono">{order.order_reference}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              {hasClaim && (order.status === 'pending_payment' || order.status === 'cash_on_delivery') && (
-                <Badge variant="secondary" className="gap-1 text-xs">
-                  <FileText className="h-3 w-3" />
-                  Claim
+              {hasClaim && (order.status === 'pending_payment') && (
+                <Badge className="gap-1 text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Transfer Initiated
                 </Badge>
               )}
               <Badge variant="outline" className="gap-1 shrink-0">
