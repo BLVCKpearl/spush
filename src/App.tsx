@@ -51,8 +51,8 @@ const App = () => (
             <CartProvider>
               <Toaster />
               <Sonner />
-              <ImpersonationBanner />
               <BrowserRouter>
+                <ImpersonationBanner />
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/v/:venueSlug" element={<VenueTableResolver />} />
