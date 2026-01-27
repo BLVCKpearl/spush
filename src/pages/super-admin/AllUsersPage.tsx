@@ -333,8 +333,8 @@ export default function AllUsersPage() {
     return <Badge variant="outline">No Role</Badge>;
   };
 
-  const getCurrentRole = (user: UserWithRoles): "tenant_admin" | "staff" | null => {
-    if (!user.roles || user.roles.length === 0) return null;
+  const getCurrentRole = (user: UserWithRoles | null | undefined): "tenant_admin" | "staff" | null => {
+    if (!user?.roles || user.roles.length === 0) return null;
     const tenantAdminRole = user.roles.find((r) => r.tenant_role === "tenant_admin");
     if (tenantAdminRole) return "tenant_admin";
     const staffRole = user.roles.find((r) => r.tenant_role === "staff");
@@ -652,12 +652,22 @@ export default function AllUsersPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <p className="text-sm text-muted-foreground mb-2">
-              Current role: <strong>{getCurrentRole(changeRoleDialogUser!) === "tenant_admin" ? "Tenant Admin" : "Staff"}</strong>
-            </p>
-            <p className="text-sm">
-              New role: <strong>{getCurrentRole(changeRoleDialogUser!) === "tenant_admin" ? "Staff" : "Tenant Admin"}</strong>
-            </p>
+            {(() => {
+              const currentRole = getCurrentRole(changeRoleDialogUser);
+              const currentLabel = currentRole === "tenant_admin" ? "Tenant Admin" : currentRole === "staff" ? "Staff" : "Unknown";
+              const nextLabel = currentRole === "tenant_admin" ? "Staff" : currentRole === "staff" ? "Tenant Admin" : "Unknown";
+
+              return (
+                <>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Current role: <strong>{currentLabel}</strong>
+                  </p>
+                  <p className="text-sm">
+                    New role: <strong>{nextLabel}</strong>
+                  </p>
+                </>
+              );
+            })()}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setChangeRoleDialogUser(null)}>
