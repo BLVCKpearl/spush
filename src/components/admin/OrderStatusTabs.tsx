@@ -1,6 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, CreditCard, Banknote, CheckCircle2, ChefHat, Bell, Utensils } from 'lucide-react';
+import { Loader2, CreditCard, Banknote, CheckCircle2, ChefHat, Bell } from 'lucide-react';
 import type { OrderWithItems } from '@/types/database';
 import OrderQueueCard from './OrderQueueCard';
 
@@ -43,12 +43,6 @@ const tabConfig = [
     label: 'Ready', 
     icon: Bell,
     filter: (o: OrderWithItems) => o.status === 'ready'
-  },
-  { 
-    value: 'served', 
-    label: 'Served', 
-    icon: Utensils,
-    filter: (o: OrderWithItems) => o.status === 'completed'
   },
 ];
 

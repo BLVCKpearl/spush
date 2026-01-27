@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, Plus, Shield, Trash2, Loader2, ToggleLeft, Building2 } from "lucide-react";
+import { AlertTriangle, Plus, Shield, Trash2, Loader2, ToggleLeft, Building2, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useTenants } from "@/hooks/useTenantManagement";
 import { useFeatureFlagsAdmin } from "@/hooks/useFeatureFlags";
@@ -30,11 +30,22 @@ const AVAILABLE_FEATURES = [
   { key: 'custom_branding', label: 'Custom Branding', description: 'Allow custom branding and white-labeling' },
 ];
 
+// Generate a secure random password
+function generateSecurePassword(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%&*";
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  return Array.from(array, (byte) => chars[byte % chars.length]).join("");
+}
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isAddSuperAdminOpen, setIsAddSuperAdminOpen] = useState(false);
   const [newSuperAdminEmail, setNewSuperAdminEmail] = useState("");
+  const [newSuperAdminDisplayName, setNewSuperAdminDisplayName] = useState("");
+  const [newSuperAdminPassword, setNewSuperAdminPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
 
@@ -58,45 +69,30 @@ export default function SettingsPage() {
   // Feature flags for selected tenant
   const { flags: tenantFlags, updateFlag, isLoading: flagsLoading } = useFeatureFlagsAdmin(selectedTenantId ?? undefined);
 
-  // Add super admin mutation
+  // Add super admin mutation - creates new user account
   const addSuperAdminMutation = useMutation({
-    mutationFn: async (email: string) => {
-      // First find the user by email in profiles
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("user_id, display_name")
-        .eq("email", email)
-        .maybeSingle();
-
-      if (profileError) throw profileError;
-      if (!profile) throw new Error("User not found. They must have an account first.");
-
-      // Check if already a super admin
-      const { data: existing } = await supabase
-        .from("super_admins")
-        .select("id")
-        .eq("user_id", profile.user_id)
-        .maybeSingle();
-
-      if (existing) throw new Error("This user is already a super admin");
-
-      // Add to super_admins
-      const { error } = await supabase.from("super_admins").insert({
-        user_id: profile.user_id,
-        email,
-        display_name: profile.display_name,
+    mutationFn: async ({ email, displayName, password }: { email: string; displayName: string; password: string }) => {
+      const { data, error } = await supabase.functions.invoke("manage-users", {
+        body: {
+          action: "create_super_admin",
+          email,
+          displayName,
+          password,
+        },
       });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["super-admins"] });
       setIsAddSuperAdminOpen(false);
-      setNewSuperAdminEmail("");
-      toast.success("Super admin added successfully");
+      resetAddSuperAdminForm();
+      toast.success("Super admin created successfully");
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to add super admin");
+      toast.error(error.message || "Failed to create super admin");
     },
   });
 
@@ -125,12 +121,36 @@ export default function SettingsPage() {
     },
   });
 
+  const resetAddSuperAdminForm = () => {
+    setNewSuperAdminEmail("");
+    setNewSuperAdminDisplayName("");
+    setNewSuperAdminPassword("");
+    setShowPassword(false);
+  };
+
+  const handleGeneratePassword = () => {
+    setNewSuperAdminPassword(generateSecurePassword());
+    setShowPassword(true);
+  };
+
   const handleAddSuperAdmin = () => {
     if (!newSuperAdminEmail.trim()) {
       toast.error("Email is required");
       return;
     }
-    addSuperAdminMutation.mutate(newSuperAdminEmail.trim());
+    if (!newSuperAdminDisplayName.trim()) {
+      toast.error("Display name is required");
+      return;
+    }
+    if (!newSuperAdminPassword || newSuperAdminPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    addSuperAdminMutation.mutate({
+      email: newSuperAdminEmail.trim(),
+      displayName: newSuperAdminDisplayName.trim(),
+      password: newSuperAdminPassword,
+    });
   };
 
   const handleToggleFlag = async (featureKey: string, currentValue: boolean) => {
@@ -317,17 +337,30 @@ export default function SettingsPage() {
       </Tabs>
 
       {/* Add Super Admin Dialog */}
-      <Dialog open={isAddSuperAdminOpen} onOpenChange={setIsAddSuperAdminOpen}>
-        <DialogContent>
+      <Dialog open={isAddSuperAdminOpen} onOpenChange={(open) => {
+        setIsAddSuperAdminOpen(open);
+        if (!open) resetAddSuperAdminForm();
+      }}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Super Admin</DialogTitle>
+            <DialogTitle>Create Super Admin</DialogTitle>
             <DialogDescription>
-              The user must already have an account in the system.
+              Create a new user account with super admin privileges.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="email">User Email</Label>
+              <Label htmlFor="displayName">Display Name</Label>
+              <Input
+                id="displayName"
+                type="text"
+                placeholder="John Doe"
+                value={newSuperAdminDisplayName}
+                onChange={(e) => setNewSuperAdminDisplayName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -335,6 +368,41 @@ export default function SettingsPage() {
                 value={newSuperAdminEmail}
                 onChange={(e) => setNewSuperAdminEmail(e.target.value)}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Temporary Password</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Min 6 characters"
+                    value={newSuperAdminPassword}
+                    onChange={(e) => setNewSuperAdminPassword(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={handleGeneratePassword}
+                  title="Generate password"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Share this password securely with the new admin.
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -345,7 +413,7 @@ export default function SettingsPage() {
               onClick={handleAddSuperAdmin}
               disabled={addSuperAdminMutation.isPending}
             >
-              {addSuperAdminMutation.isPending ? "Adding..." : "Add Super Admin"}
+              {addSuperAdminMutation.isPending ? "Creating..." : "Create Super Admin"}
             </Button>
           </DialogFooter>
         </DialogContent>

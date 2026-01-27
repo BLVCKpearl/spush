@@ -68,6 +68,13 @@ interface BootstrapSuperAdminRequest {
   fullName: string;
 }
 
+interface CreateSuperAdminRequest {
+  action: "create_super_admin";
+  email: string;
+  password: string;
+  displayName: string;
+}
+
 type UserManagementRequest =
   | CreateUserRequest
   | UpdateUserRequest
@@ -77,7 +84,8 @@ type UserManagementRequest =
   | ServiceRolePasswordRequest
   | DeleteUserRequest
   | ArchiveUserRequest
-  | BootstrapSuperAdminRequest;
+  | BootstrapSuperAdminRequest
+  | CreateSuperAdminRequest;
 
 // Generate a secure random password
 function generateSecurePassword(): string {
@@ -163,6 +171,135 @@ Deno.serve(async (req) => {
         user_id: newUser.user.id,
         email,
         display_name: fullName,
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          userId: newUser.user.id,
+          message: "Super admin created successfully",
+        }),
+        { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Create super admin with new account - requires existing super admin auth
+    if (body.action === "create_super_admin") {
+      const { email, password, displayName } = body as CreateSuperAdminRequest;
+
+      if (!email || !password || !displayName) {
+        return new Response(
+          JSON.stringify({ error: "Email, password, and display name are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (password.length < 6) {
+        return new Response(
+          JSON.stringify({ error: "Password must be at least 6 characters" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // This action requires authentication
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        return new Response(
+          JSON.stringify({ error: "Authorization required" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const token = authHeader.replace("Bearer ", "");
+      const { data: claimsData, error: claimsError } = await supabaseAdmin.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) {
+        return new Response(
+          JSON.stringify({ error: "Invalid token" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      const actorUserId = claimsData.claims.sub as string;
+
+      // Verify actor is a super admin
+      const { data: superAdminCheck } = await supabaseAdmin
+        .from("super_admins")
+        .select("id")
+        .eq("user_id", actorUserId)
+        .maybeSingle();
+      
+      if (!superAdminCheck) {
+        return new Response(
+          JSON.stringify({ error: "Only super admins can create other super admins" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Check if email already exists
+      const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+      const emailExists = existingUsers?.users.some(
+        (u) => u.email?.toLowerCase() === email.toLowerCase()
+      );
+
+      if (emailExists) {
+        return new Response(
+          JSON.stringify({ error: "A user with this email already exists" }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Create the new super admin user
+      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: displayName },
+      });
+
+      if (createError || !newUser.user) {
+        console.error("Error creating super admin:", createError);
+        return new Response(
+          JSON.stringify({ error: createError?.message || "Failed to create super admin" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Create profile (no venue_id for super admins)
+      const { error: profileError } = await supabaseAdmin.from("profiles").insert({
+        user_id: newUser.user.id,
+        email,
+        display_name: displayName,
+        is_active: true,
+        onboarding_completed: true,
+      });
+
+      if (profileError) {
+        console.error("Error creating profile:", profileError);
+      }
+
+      // Add to super_admins table
+      const { error: superAdminError } = await supabaseAdmin.from("super_admins").insert({
+        user_id: newUser.user.id,
+        email,
+        display_name: displayName,
+      });
+
+      if (superAdminError) {
+        console.error("Error adding to super_admins:", superAdminError);
+        // Cleanup: delete the created user
+        await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
+        return new Response(
+          JSON.stringify({ error: "Failed to assign super admin role" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Audit log
+      await supabaseAdmin.from("admin_audit_logs").insert({
+        actor_user_id: actorUserId,
+        action: "super_admin_created",
+        target_user_id: newUser.user.id,
+        metadata: { email, display_name: displayName },
       });
 
       return new Response(
