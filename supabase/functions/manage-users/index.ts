@@ -41,6 +41,7 @@ interface DeleteUserRequest {
   action: "delete";
   userId: string;
   tenantId?: string;
+  skipTenantAdminCheck?: boolean; // For tenant deletion - skips last-admin protection
 }
 
 interface ArchiveUserRequest {
@@ -1309,7 +1310,7 @@ Deno.serve(async (req) => {
       }
 
       case "delete": {
-        const { userId, tenantId: requestedTenantId } = body as DeleteUserRequest;
+        const { userId, tenantId: requestedTenantId, skipTenantAdminCheck } = body as DeleteUserRequest;
         const effectiveTenantId = getEffectiveTenantId(requestedTenantId);
 
         if (!userId) {
@@ -1352,7 +1353,8 @@ Deno.serve(async (req) => {
 
         const userTenantId = targetProfile.venue_id || effectiveTenantId;
 
-        // Check last-tenant-admin protection
+        // Check last-tenant-admin protection (skip when deleting entire tenant)
+        // Only super admins can use skipTenantAdminCheck flag
         const { data: targetRoles } = await supabaseAdmin
           .from("user_roles")
           .select("tenant_role")
@@ -1360,16 +1362,18 @@ Deno.serve(async (req) => {
           .eq("tenant_id", userTenantId)
           .maybeSingle();
 
-        if (targetRoles?.tenant_role === "tenant_admin" && userTenantId) {
-          const { data: adminCount } = await supabaseAdmin.rpc("count_active_tenant_admins", {
-            _tenant_id: userTenantId,
-          });
+        if (!skipTenantAdminCheck || !isSuperAdmin) {
+          if (targetRoles?.tenant_role === "tenant_admin" && userTenantId) {
+            const { data: adminCount } = await supabaseAdmin.rpc("count_active_tenant_admins", {
+              _tenant_id: userTenantId,
+            });
 
-          if (adminCount <= 1) {
-            return new Response(
-              JSON.stringify({ error: "Cannot delete the last remaining tenant admin" }),
-              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+            if (adminCount <= 1) {
+              return new Response(
+                JSON.stringify({ error: "Cannot delete the last remaining tenant admin" }),
+                { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
           }
         }
 
