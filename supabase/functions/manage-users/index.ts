@@ -395,12 +395,15 @@ Deno.serve(async (req) => {
         // Map role to tenant_role
         const tenantRole = role === "admin" ? "tenant_admin" : "staff";
 
-        // Assign role with tenant context
-        const { error: roleError } = await supabaseAdmin.from("user_roles").insert({
+        // Assign role with tenant context - use upsert to handle duplicates
+        const { error: roleError } = await supabaseAdmin.from("user_roles").upsert({
           user_id: newUser.user.id,
           role,
           tenant_id: effectiveTenantId,
           tenant_role: tenantRole,
+        }, { 
+          onConflict: 'user_id,role',
+          ignoreDuplicates: false 
         });
 
         if (roleError) {
@@ -408,7 +411,7 @@ Deno.serve(async (req) => {
           // Clean up: delete the created user
           await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
           return new Response(
-            JSON.stringify({ error: "Failed to assign role" }),
+            JSON.stringify({ error: "Failed to assign role: " + roleError.message }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
