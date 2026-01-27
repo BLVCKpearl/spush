@@ -11,6 +11,16 @@ interface AnalyticsData {
   averageOrderValueKobo: number;
 }
 
+interface ServedOrder {
+  id: string;
+  order_reference: string;
+  table_number: number;
+  table_label: string | null;
+  total_kobo: number;
+  payment_method: 'bank_transfer' | 'cash';
+  created_at: string;
+}
+
 // Statuses that represent "paid" orders
 const PAID_STATUSES: OrderStatus[] = ['confirmed', 'preparing', 'ready', 'completed'];
 
@@ -56,6 +66,38 @@ export function useTodayAnalytics(tenantId: string | null | undefined) {
       };
     },
     enabled: tenantId !== undefined, // Allow null for super admins
+  });
+}
+
+/**
+ * Served/completed orders for today, tenant-scoped
+ */
+export function useServedOrders(tenantId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['analytics', 'served-orders', tenantId],
+    queryFn: async (): Promise<ServedOrder[]> => {
+      const today = new Date();
+      const dayStart = startOfDay(today).toISOString();
+      const dayEnd = endOfDay(today).toISOString();
+
+      let query = supabase
+        .from('orders')
+        .select('id, order_reference, table_number, table_label, total_kobo, payment_method, created_at')
+        .eq('status', 'completed')
+        .gte('created_at', dayStart)
+        .lte('created_at', dayEnd)
+        .order('created_at', { ascending: false });
+
+      if (tenantId) {
+        query = query.eq('venue_id', tenantId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return (data || []) as ServedOrder[];
+    },
+    enabled: tenantId !== undefined,
   });
 }
 

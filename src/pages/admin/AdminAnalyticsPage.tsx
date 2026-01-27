@@ -2,15 +2,18 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useTodayAnalytics } from '@/hooks/useAnalytics';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { useTodayAnalytics, useServedOrders } from '@/hooks/useAnalytics';
 import { formatNaira } from '@/lib/currency';
-import { TrendingUp, ShoppingCart, DollarSign } from 'lucide-react';
+import { TrendingUp, ShoppingCart, DollarSign, Loader2 } from 'lucide-react';
 
 export default function AdminAnalyticsPage() {
   const { tenantId } = useAuth();
   
   // Scope analytics to current tenant
   const { data: analytics, isLoading } = useTodayAnalytics(tenantId);
+  const { data: servedOrders, isLoading: servedLoading } = useServedOrders(tenantId);
 
   if (!tenantId) {
     return (
@@ -94,6 +97,53 @@ export default function AdminAnalyticsPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Served Orders Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Served Orders Today</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Table</TableHead>
+                  <TableHead>Order Ref</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Payment</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {servedLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                    </TableCell>
+                  </TableRow>
+                ) : !servedOrders || servedOrders.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      No served orders yet today
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  servedOrders.map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell className="font-medium">{order.table_label || `Table ${order.table_number}`}</TableCell>
+                      <TableCell className="font-mono text-sm">{order.order_reference}</TableCell>
+                      <TableCell className="text-right font-medium">{formatNaira(order.total_kobo)}</TableCell>
+                      <TableCell>
+                        <Badge variant={order.payment_method === 'bank_transfer' ? 'secondary' : 'outline'}>
+                          {order.payment_method === 'bank_transfer' ? 'Transfer' : 'Cash'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
     </AdminLayout>
   );
