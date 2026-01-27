@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import AdminLayout from '@/components/admin/AdminLayout';
-import { useAuth } from '@/contexts/AuthContext';
+import { useTenant } from '@/contexts/TenantContext';
 import { useTenantBankDetails, useCreateBankDetails, useUpdateBankDetails } from '@/hooks/useBankDetails';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,9 +21,10 @@ import { toast } from 'sonner';
 import type { BankDetails } from '@/types/database';
 
 export default function AdminBankDetailsPage() {
-  const { tenantId } = useAuth();
+  // Use tenant context - handles impersonation automatically
+  const { tenantId } = useTenant();
   
-  // Scope to current tenant
+  // Scope to current tenant (works with impersonation)
   const { data: bankDetails, isLoading } = useTenantBankDetails(tenantId);
   const createBankDetails = useCreateBankDetails();
   const updateBankDetails = useUpdateBankDetails();
