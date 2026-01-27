@@ -1,12 +1,30 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import PageTitle from "@/components/layout/PageTitle";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Shield, ShieldCheck, User } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Search, Shield, ShieldCheck, User, MoreHorizontal, KeyRound, Ban, CheckCircle, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface UserWithRoles {
   id: string;
@@ -22,7 +40,11 @@ interface UserWithRoles {
 }
 
 export default function AllUsersPage() {
+  const { user: currentUser } = useAuth();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [revokeDialogUser, setRevokeDialogUser] = useState<UserWithRoles | null>(null);
+  const [resetDialogUser, setResetDialogUser] = useState<UserWithRoles | null>(null);
 
   // Fetch all users with their roles
   const { data: users, isLoading } = useQuery({
@@ -64,6 +86,77 @@ export default function AllUsersPage() {
       });
 
       return usersWithRoles;
+    },
+  });
+
+  // Revoke access mutation (deactivate user)
+  const revokeMutation = useMutation({
+    mutationFn: async ({ userId, activate }: { userId: string; activate: boolean }) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ is_active: activate })
+        .eq("user_id", userId);
+
+      if (error) throw error;
+
+      // Log the action
+      await supabase.from("admin_audit_logs").insert({
+        action: activate ? "user_reactivated" : "user_deactivated",
+        actor_user_id: currentUser?.id || "",
+        target_user_id: userId,
+        metadata: { 
+          action_type: activate ? "reactivate" : "revoke",
+          timestamp: new Date().toISOString(),
+        },
+      });
+    },
+    onSuccess: (_, { activate }) => {
+      queryClient.invalidateQueries({ queryKey: ["super-admin-all-users"] });
+      toast.success(activate ? "User reactivated successfully" : "User access revoked");
+      setRevokeDialogUser(null);
+    },
+    onError: (error) => {
+      toast.error(`Failed to update user: ${error.message}`);
+    },
+  });
+
+  // Password reset mutation
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data, error } = await supabase.functions.invoke("manage-users", {
+        body: {
+          action: "service_set_password",
+          userId,
+          newPassword: "Reset123!", // Temporary password
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      // Set must_change_password flag
+      await supabase
+        .from("profiles")
+        .update({ must_change_password: true })
+        .eq("user_id", userId);
+
+      // Log the action
+      await supabase.from("admin_audit_logs").insert({
+        action: "password_reset_by_super_admin",
+        actor_user_id: currentUser?.id || "",
+        target_user_id: userId,
+        metadata: { timestamp: new Date().toISOString() },
+      });
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["super-admin-all-users"] });
+      toast.success("Password reset to 'Reset123!' - user must change on next login");
+      setResetDialogUser(null);
+    },
+    onError: (error) => {
+      toast.error(`Failed to reset password: ${error.message}`);
     },
   });
 
@@ -115,6 +208,11 @@ export default function AllUsersPage() {
     }
 
     return <Badge variant="outline">No Role</Badge>;
+  };
+
+  const canManageUser = (user: UserWithRoles) => {
+    // Cannot manage super admins or self
+    return !user.is_super_admin && user.user_id !== currentUser?.id;
   };
 
   return (
@@ -177,24 +275,25 @@ export default function AllUsersPage() {
                 <TableHead>Tenant</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Joined</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    Loading users...
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                   </TableCell>
                 </TableRow>
               ) : filteredUsers?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     No users found
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredUsers?.map((user) => (
-                  <TableRow key={user.id}>
+                  <TableRow key={user.id} className={!user.is_active ? "opacity-60" : ""}>
                     <TableCell>
                       <div>
                         <div className="font-medium">{user.display_name || "—"}</div>
@@ -212,18 +311,54 @@ export default function AllUsersPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                    {user.is_active ? (
+                      {user.is_active ? (
                         <Badge variant="secondary" className="bg-accent text-accent-foreground">
+                          <CheckCircle className="h-3 w-3 mr-1" />
                           Active
                         </Badge>
                       ) : (
                         <Badge variant="destructive">
+                          <Ban className="h-3 w-3 mr-1" />
                           Inactive
                         </Badge>
                       )}
                     </TableCell>
                     <TableCell>
                       {new Date(user.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      {canManageUser(user) && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setResetDialogUser(user)}>
+                              <KeyRound className="h-4 w-4 mr-2" />
+                              Reset Password
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => setRevokeDialogUser(user)}
+                              className={user.is_active ? "text-destructive focus:text-destructive" : "text-primary"}
+                            >
+                              {user.is_active ? (
+                                <>
+                                  <Ban className="h-4 w-4 mr-2" />
+                                  Revoke Access
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Reactivate User
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))
@@ -232,6 +367,64 @@ export default function AllUsersPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Revoke/Reactivate Confirmation Dialog */}
+      <Dialog open={!!revokeDialogUser} onOpenChange={(open) => !open && setRevokeDialogUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {revokeDialogUser?.is_active ? "Revoke Access" : "Reactivate User"}
+            </DialogTitle>
+            <DialogDescription>
+              {revokeDialogUser?.is_active
+                ? `Are you sure you want to revoke access for "${revokeDialogUser?.display_name || revokeDialogUser?.email}"? They will no longer be able to sign in.`
+                : `Are you sure you want to reactivate "${revokeDialogUser?.display_name || revokeDialogUser?.email}"? They will be able to sign in again.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRevokeDialogUser(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={revokeDialogUser?.is_active ? "destructive" : "default"}
+              onClick={() => revokeDialogUser && revokeMutation.mutate({ 
+                userId: revokeDialogUser.user_id, 
+                activate: !revokeDialogUser.is_active 
+              })}
+              disabled={revokeMutation.isPending}
+            >
+              {revokeMutation.isPending
+                ? "Processing..."
+                : revokeDialogUser?.is_active
+                  ? "Revoke Access"
+                  : "Reactivate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Confirmation Dialog */}
+      <Dialog open={!!resetDialogUser} onOpenChange={(open) => !open && setResetDialogUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              Reset the password for "{resetDialogUser?.display_name || resetDialogUser?.email}" to a temporary value? They will be required to change it on their next login.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetDialogUser(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => resetDialogUser && resetPasswordMutation.mutate(resetDialogUser.user_id)}
+              disabled={resetPasswordMutation.isPending}
+            >
+              {resetPasswordMutation.isPending ? "Resetting..." : "Reset Password"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
