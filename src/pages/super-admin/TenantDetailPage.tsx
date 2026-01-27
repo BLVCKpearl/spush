@@ -612,7 +612,7 @@ export default function TenantDetailPage() {
                               setResetPasswordUser({ id: u.id, email: u.email, displayName: u.displayName })
                             }
                           >
-                            <KeyRound className="h-4 w-4 mr-2" /> Reset Password
+                            <KeyRound className="h-4 w-4 mr-2" /> Set Password
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem

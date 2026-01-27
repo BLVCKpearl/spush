@@ -647,10 +647,6 @@ export default function AllUsersPage() {
                             <Key className="h-4 w-4 mr-2" />
                             Set Password
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setResetDialogUser(user)}>
-                            <KeyRound className="h-4 w-4 mr-2" />
-                            Reset to Temp Password
-                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {!isSelf(user) && (
                             <DropdownMenuItem
