@@ -19,23 +19,19 @@ import type { PaymentMethod } from '@/types/database';
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const { session } = useTableSession();
-  const { items, tableNumber, tableSession, getTotalKobo, clearCart } = useCart();
+  const { items, getTotalKobo, clearCart } = useCart();
   const createOrder = useCreateOrder();
   const { idempotencyKey, clearKey } = usePersistedIdempotencyKey();
   
   const [customerName, setCustomerName] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('bank_transfer');
 
-  // Use session from context or hook
-  const currentSession = tableSession || session;
-  const hasValidSession = currentSession || tableNumber;
-
   const handleBack = useCallback(() => {
     navigate(-1);
   }, [navigate]);
 
   // Redirect if no valid session or empty cart
-  if (!hasValidSession || items.length === 0) {
+  if (!session || items.length === 0) {
     return (
       <div className="min-h-screen bg-background p-4">
         <div className="text-center py-12">
@@ -51,14 +47,13 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     try {
-      // Derive table number from session or use legacy tableNumber
-      const effectiveTableNumber = currentSession 
-        ? parseInt(currentSession.tableLabel.replace(/\D/g, '')) || 1
-        : tableNumber!;
+      // Extract table number from label (e.g., "Table 5" -> 5)
+      const tableNumberMatch = session.tableLabel.match(/\d+/);
+      const effectiveTableNumber = tableNumberMatch ? parseInt(tableNumberMatch[0], 10) : 1;
 
       const order = await createOrder.mutateAsync({
-        venueId: currentSession?.venueId,
-        tableId: currentSession?.tableId,
+        venueId: session.venueId,
+        tableId: session.tableId,
         tableNumber: effectiveTableNumber,
         customerName: customerName.trim() || undefined,
         paymentMethod,
@@ -84,16 +79,12 @@ export default function CheckoutPage() {
   };
 
   const totalKobo = getTotalKobo();
-  const displayLocation = currentSession 
-    ? currentSession.tableLabel 
-    : `Table ${tableNumber}`;
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Consistent Guest Header */}
       <GuestHeader 
         title="Checkout" 
-        subtitle={displayLocation}
+        subtitle={session.tableLabel}
         showBack 
       />
 
