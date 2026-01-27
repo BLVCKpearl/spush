@@ -508,11 +508,14 @@ export type Database = {
       }
       profiles: {
         Row: {
+          archived_at: string | null
+          archived_by: string | null
           created_at: string
           display_name: string | null
           email: string | null
           id: string
           is_active: boolean
+          is_archived: boolean
           must_change_password: boolean
           onboarding_completed: boolean
           onboarding_completed_at: string | null
@@ -521,11 +524,14 @@ export type Database = {
           venue_id: string | null
         }
         Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           display_name?: string | null
           email?: string | null
           id?: string
           is_active?: boolean
+          is_archived?: boolean
           must_change_password?: boolean
           onboarding_completed?: boolean
           onboarding_completed_at?: string | null
@@ -534,11 +540,14 @@ export type Database = {
           venue_id?: string | null
         }
         Update: {
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           display_name?: string | null
           email?: string | null
           id?: string
           is_active?: boolean
+          is_archived?: boolean
           must_change_password?: boolean
           onboarding_completed?: boolean
           onboarding_completed_at?: string | null

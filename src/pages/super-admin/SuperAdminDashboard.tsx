@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Building2, Users, BarChart3, Settings, LogOut, ChefHat, UserCog, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Building2, Users, BarChart3, Settings, LogOut, ChefHat, UserCog, PanelLeftClose, PanelLeft, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NavLink } from "@/components/NavLink";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -15,6 +15,7 @@ const navItems = [
   { to: "/super-admin/tenants", icon: Building2, label: "Tenants" },
   { to: "/super-admin/impersonation", icon: UserCog, label: "Impersonation" },
   { to: "/super-admin/users", icon: Users, label: "All Users" },
+  { to: "/super-admin/users/archived", icon: Archive, label: "Archived Users" },
   { to: "/super-admin/analytics", icon: BarChart3, label: "Global Analytics" },
   { to: "/super-admin/settings", icon: Settings, label: "Settings" },
 ];
