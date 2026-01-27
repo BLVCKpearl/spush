@@ -1,19 +1,67 @@
+import { useState } from 'react';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTodayAnalytics, useServedOrders } from '@/hooks/useAnalytics';
 import { formatNaira } from '@/lib/currency';
-import { TrendingUp, ShoppingCart, DollarSign, Loader2 } from 'lucide-react';
+import { TrendingUp, ShoppingCart, DollarSign, Loader2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { format } from 'date-fns';
+
+type SortField = 'created_at' | 'total_kobo' | 'table_label';
+type SortDirection = 'asc' | 'desc';
+type DateFilter = 'today' | 'week' | 'month' | 'all';
 
 export default function AdminAnalyticsPage() {
   const { tenantId } = useAuth();
   
+  // Filter and sorting state
+  const [dateFilter, setDateFilter] = useState<DateFilter>('today');
+  const [sortField, setSortField] = useState<SortField>('created_at');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  
   // Scope analytics to current tenant
   const { data: analytics, isLoading } = useTodayAnalytics(tenantId);
-  const { data: servedOrders, isLoading: servedLoading } = useServedOrders(tenantId);
+  const { data: servedOrders, isLoading: servedLoading } = useServedOrders(tenantId, dateFilter);
+
+  // Sort the orders
+  const sortedOrders = [...(servedOrders || [])].sort((a, b) => {
+    let comparison = 0;
+    switch (sortField) {
+      case 'created_at':
+        comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        break;
+      case 'total_kobo':
+        comparison = a.total_kobo - b.total_kobo;
+        break;
+      case 'table_label':
+        const labelA = a.table_label || `Table ${a.table_number}`;
+        const labelB = b.table_label || `Table ${b.table_number}`;
+        comparison = labelA.localeCompare(labelB);
+        break;
+    }
+    return sortDirection === 'asc' ? comparison : -comparison;
+  });
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" />;
+    return sortDirection === 'asc' 
+      ? <ArrowUp className="h-4 w-4 ml-1" />
+      : <ArrowDown className="h-4 w-4 ml-1" />;
+  };
 
   if (!tenantId) {
     return (
@@ -100,42 +148,84 @@ export default function AdminAnalyticsPage() {
 
         {/* Served Orders Table */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Served Orders Today</CardTitle>
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <CardTitle className="text-base">Served Orders</CardTitle>
+            <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by date" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">Last 7 Days</SelectItem>
+                <SelectItem value="month">Last 30 Days</SelectItem>
+                <SelectItem value="all">All Time</SelectItem>
+              </SelectContent>
+            </Select>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Table</TableHead>
+                  <TableHead>
+                    <Button 
+                      variant="ghost" 
+                      className="h-auto p-0 font-medium hover:bg-transparent"
+                      onClick={() => handleSort('table_label')}
+                    >
+                      Table
+                      <SortIcon field="table_label" />
+                    </Button>
+                  </TableHead>
                   <TableHead>Order Ref</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>
+                    <Button 
+                      variant="ghost" 
+                      className="h-auto p-0 font-medium hover:bg-transparent"
+                      onClick={() => handleSort('total_kobo')}
+                    >
+                      Amount
+                      <SortIcon field="total_kobo" />
+                    </Button>
+                  </TableHead>
                   <TableHead>Payment</TableHead>
+                  <TableHead>
+                    <Button 
+                      variant="ghost" 
+                      className="h-auto p-0 font-medium hover:bg-transparent"
+                      onClick={() => handleSort('created_at')}
+                    >
+                      Time
+                      <SortIcon field="created_at" />
+                    </Button>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {servedLoading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8">
+                    <TableCell colSpan={5} className="text-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
-                ) : !servedOrders || servedOrders.length === 0 ? (
+                ) : !sortedOrders || sortedOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                      No served orders yet today
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      No served orders for this period
                     </TableCell>
                   </TableRow>
                 ) : (
-                  servedOrders.map((order) => (
+                  sortedOrders.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell className="font-medium">{order.table_label || `Table ${order.table_number}`}</TableCell>
                       <TableCell className="font-mono text-sm">{order.order_reference}</TableCell>
-                      <TableCell className="text-right font-medium">{formatNaira(order.total_kobo)}</TableCell>
+                      <TableCell className="font-medium">{formatNaira(order.total_kobo)}</TableCell>
                       <TableCell>
                         <Badge variant={order.payment_method === 'bank_transfer' ? 'secondary' : 'outline'}>
                           {order.payment_method === 'bank_transfer' ? 'Transfer' : 'Cash'}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {format(new Date(order.created_at), 'HH:mm')}
                       </TableCell>
                     </TableRow>
                   ))

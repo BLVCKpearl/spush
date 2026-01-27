@@ -70,23 +70,41 @@ export function useTodayAnalytics(tenantId: string | null | undefined) {
 }
 
 /**
- * Served/completed orders for today, tenant-scoped
+ * Served/completed orders, tenant-scoped with date filter
  */
-export function useServedOrders(tenantId: string | null | undefined) {
+export function useServedOrders(tenantId: string | null | undefined, dateFilter: 'today' | 'week' | 'month' | 'all' = 'today') {
   return useQuery({
-    queryKey: ['analytics', 'served-orders', tenantId],
+    queryKey: ['analytics', 'served-orders', tenantId, dateFilter],
     queryFn: async (): Promise<ServedOrder[]> => {
-      const today = new Date();
-      const dayStart = startOfDay(today).toISOString();
-      const dayEnd = endOfDay(today).toISOString();
+      const now = new Date();
+      let startDate: Date | null = null;
+      
+      switch (dateFilter) {
+        case 'today':
+          startDate = startOfDay(now);
+          break;
+        case 'week':
+          startDate = new Date(now);
+          startDate.setDate(startDate.getDate() - 7);
+          break;
+        case 'month':
+          startDate = new Date(now);
+          startDate.setDate(startDate.getDate() - 30);
+          break;
+        case 'all':
+          startDate = null;
+          break;
+      }
 
       let query = supabase
         .from('orders')
         .select('id, order_reference, table_number, table_label, total_kobo, payment_method, created_at')
         .eq('status', 'completed')
-        .gte('created_at', dayStart)
-        .lte('created_at', dayEnd)
         .order('created_at', { ascending: false });
+
+      if (startDate) {
+        query = query.gte('created_at', startDate.toISOString());
+      }
 
       if (tenantId) {
         query = query.eq('venue_id', tenantId);

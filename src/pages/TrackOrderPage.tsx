@@ -115,12 +115,12 @@ export default function TrackOrderPage() {
   const { data: order, isLoading, refetch } = useOrder(activeReference);
   const { data: paymentClaims } = usePaymentClaims(order?.id);
 
-  // Realtime subscription for order updates
+  // Realtime subscription for order updates - refetch directly for immediate UI update
   useEffect(() => {
     if (!order?.id) return;
 
     const channel = supabase
-      .channel(`order-${order.id}`)
+      .channel(`order-track-${order.id}`)
       .on(
         'postgres_changes',
         {
@@ -129,8 +129,11 @@ export default function TrackOrderPage() {
           table: 'orders',
           filter: `id=eq.${order.id}`,
         },
-        () => {
+        (payload) => {
+          // Immediately refetch to get the latest data
           queryClient.invalidateQueries({ queryKey: ['order', activeReference] });
+          // Also trigger a refetch to ensure data is fresh
+          refetch();
         }
       )
       .subscribe();
@@ -138,7 +141,7 @@ export default function TrackOrderPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [order?.id, activeReference, queryClient]);
+  }, [order?.id, activeReference, queryClient, refetch]);
 
   const handleSearch = () => {
     if (searchRef.trim()) {
