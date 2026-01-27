@@ -364,11 +364,16 @@ Deno.serve(async (req) => {
           : generateSecurePassword();
 
         // Create user in auth.users
+        // Include is_staff_creation flag so trigger skips venue creation
         const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
           email,
           password: userPassword,
           email_confirm: true,
-          user_metadata: { full_name: fullName },
+          user_metadata: { 
+            full_name: fullName,
+            is_staff_creation: true,
+            tenant_id: effectiveTenantId,
+          },
         });
 
         if (createError || !newUser.user) {
