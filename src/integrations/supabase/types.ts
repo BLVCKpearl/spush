@@ -736,19 +736,28 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_suspended: boolean
           name: string
+          suspended_at: string | null
+          suspended_by: string | null
           venue_slug: string
         }
         Insert: {
           created_at?: string
           id?: string
+          is_suspended?: boolean
           name: string
+          suspended_at?: string | null
+          suspended_by?: string | null
           venue_slug: string
         }
         Update: {
           created_at?: string
           id?: string
+          is_suspended?: boolean
           name?: string
+          suspended_at?: string | null
+          suspended_by?: string | null
           venue_slug?: string
         }
         Relationships: []

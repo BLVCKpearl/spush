@@ -1,97 +1,69 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import PageTitle from "@/components/layout/PageTitle";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Plus, Building2, Users, ShoppingCart, Search } from "lucide-react";
-import { toast } from "sonner";
-
-interface Tenant {
-  id: string;
-  name: string;
-  venue_slug: string;
-  created_at: string;
-  _count?: {
-    users: number;
-    orders: number;
-  };
-}
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import PageTitle from '@/components/layout/PageTitle';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Plus,
+  Building2,
+  Users,
+  ShoppingCart,
+  Search,
+  MoreHorizontal,
+  Eye,
+  UserCog,
+  Ban,
+  CheckCircle,
+  Loader2,
+} from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { useImpersonation } from '@/contexts/ImpersonationContext';
+import {
+  useTenants,
+  useSuspendTenant,
+  useCreateTenant,
+  type ManagedTenant,
+} from '@/hooks/useTenantManagement';
 
 export default function TenantsPage() {
-  const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useState("");
+  const navigate = useNavigate();
+  const { startImpersonation } = useImpersonation();
+
+  const [searchQuery, setSearchQuery] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [newTenantName, setNewTenantName] = useState("");
-  const [newTenantSlug, setNewTenantSlug] = useState("");
+  const [newTenantName, setNewTenantName] = useState('');
+  const [newTenantSlug, setNewTenantSlug] = useState('');
+  const [suspendDialogTenant, setSuspendDialogTenant] = useState<ManagedTenant | null>(null);
 
-  // Fetch all tenants (venues)
-  const { data: tenants, isLoading } = useQuery({
-    queryKey: ["super-admin-tenants"],
-    queryFn: async () => {
-      const { data: venues, error } = await supabase
-        .from("venues")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      // Get counts for each venue
-      const tenantsWithCounts = await Promise.all(
-        (venues || []).map(async (venue) => {
-          const [usersResult, ordersResult] = await Promise.all([
-            supabase
-              .from("user_roles")
-              .select("id", { count: "exact", head: true })
-              .eq("tenant_id", venue.id),
-            supabase
-              .from("orders")
-              .select("id", { count: "exact", head: true })
-              .eq("venue_id", venue.id),
-          ]);
-
-          return {
-            ...venue,
-            _count: {
-              users: usersResult.count || 0,
-              orders: ordersResult.count || 0,
-            },
-          };
-        })
-      );
-
-      return tenantsWithCounts as Tenant[];
-    },
-  });
-
-  // Create tenant mutation
-  const createTenantMutation = useMutation({
-    mutationFn: async ({ name, slug }: { name: string; slug: string }) => {
-      const { data, error } = await supabase
-        .from("venues")
-        .insert({ name, venue_slug: slug })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["super-admin-tenants"] });
-      setIsCreateOpen(false);
-      setNewTenantName("");
-      setNewTenantSlug("");
-      toast.success("Tenant created successfully");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to create tenant");
-    },
-  });
+  const { data: tenants, isLoading } = useTenants();
+  const suspendMutation = useSuspendTenant();
+  const createMutation = useCreateTenant();
 
   const filteredTenants = tenants?.filter(
     (tenant) =>
@@ -100,21 +72,60 @@ export default function TenantsPage() {
   );
 
   const handleCreateTenant = () => {
-    if (!newTenantName.trim() || !newTenantSlug.trim()) {
-      toast.error("Name and slug are required");
-      return;
-    }
-    createTenantMutation.mutate({ name: newTenantName, slug: newTenantSlug });
+    if (!newTenantName.trim() || !newTenantSlug.trim()) return;
+    createMutation.mutate(
+      { name: newTenantName, slug: newTenantSlug },
+      {
+        onSuccess: () => {
+          setIsCreateOpen(false);
+          setNewTenantName('');
+          setNewTenantSlug('');
+        },
+      }
+    );
   };
 
-  // Auto-generate slug from name
   const handleNameChange = (name: string) => {
     setNewTenantName(name);
     const slug = name
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
     setNewTenantSlug(slug);
+  };
+
+  const handleImpersonate = (tenant: ManagedTenant) => {
+    startImpersonation({
+      id: tenant.id,
+      name: tenant.name,
+      venue_slug: tenant.venue_slug,
+    });
+    navigate('/admin/orders');
+  };
+
+  const handleSuspendConfirm = () => {
+    if (!suspendDialogTenant) return;
+    suspendMutation.mutate(
+      { tenantId: suspendDialogTenant.id, suspend: !suspendDialogTenant.is_suspended },
+      { onSuccess: () => setSuspendDialogTenant(null) }
+    );
+  };
+
+  const getStatusBadge = (tenant: ManagedTenant) => {
+    if (tenant.is_suspended) {
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <Ban className="h-3 w-3" />
+          Suspended
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline" className="gap-1 text-primary border-primary/30">
+        <CheckCircle className="h-3 w-3" />
+        Active
+      </Badge>
+    );
   };
 
   return (
@@ -128,7 +139,7 @@ export default function TenantsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -139,6 +150,22 @@ export default function TenantsPage() {
             <div className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-primary" />
               <span className="text-2xl font-bold">{tenants?.length || 0}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Active Tenants
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-primary" />
+              <span className="text-2xl font-bold">
+                {tenants?.filter((t) => !t.is_suspended).length || 0}
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -180,7 +207,7 @@ export default function TenantsPage() {
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search tenants..."
+          placeholder="Search tenants by name or slug..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-10"
@@ -195,41 +222,82 @@ export default function TenantsPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Slug</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Users</TableHead>
                 <TableHead>Orders</TableHead>
                 <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    Loading tenants...
+                  <TableCell colSpan={7} className="text-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                   </TableCell>
                 </TableRow>
               ) : filteredTenants?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    No tenants found
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    {searchQuery ? 'No tenants match your search' : 'No tenants found'}
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredTenants?.map((tenant) => (
-                  <TableRow key={tenant.id}>
+                  <TableRow key={tenant.id} className={tenant.is_suspended ? 'opacity-60' : ''}>
                     <TableCell className="font-medium">{tenant.name}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">{tenant.venue_slug}</Badge>
                     </TableCell>
+                    <TableCell>{getStatusBadge(tenant)}</TableCell>
                     <TableCell>{tenant._count?.users || 0}</TableCell>
                     <TableCell>{tenant._count?.orders || 0}</TableCell>
-                    <TableCell>
-                      {new Date(tenant.created_at).toLocaleDateString()}
+                    <TableCell className="text-muted-foreground text-sm">
+                      {formatDistanceToNow(new Date(tenant.created_at), { addSuffix: true })}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm">
-                        View
-                      </Button>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleImpersonate(tenant)}>
+                            <UserCog className="h-4 w-4 mr-2" />
+                            Impersonate Admin
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              window.open(`/v/${tenant.venue_slug}`, '_blank')
+                            }
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Public Menu
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => setSuspendDialogTenant(tenant)}
+                            className={
+                              tenant.is_suspended
+                                ? 'text-primary'
+                                : 'text-destructive focus:text-destructive'
+                            }
+                          >
+                            {tenant.is_suspended ? (
+                              <>
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Reactivate Tenant
+                              </>
+                            ) : (
+                              <>
+                                <Ban className="h-4 w-4 mr-2" />
+                                Suspend Tenant
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))
@@ -244,6 +312,9 @@ export default function TenantsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create New Tenant</DialogTitle>
+            <DialogDescription>
+              Create a new business workspace. The owner will need to be invited separately.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -264,7 +335,7 @@ export default function TenantsPage() {
                 onChange={(e) => setNewTenantSlug(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Customers will access via: /v/{newTenantSlug || "slug"}
+                Customers will access via: /v/{newTenantSlug || 'slug'}
               </p>
             </div>
           </div>
@@ -272,11 +343,43 @@ export default function TenantsPage() {
             <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
               Cancel
             </Button>
+            <Button onClick={handleCreateTenant} disabled={createMutation.isPending}>
+              {createMutation.isPending ? 'Creating...' : 'Create Tenant'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Suspend/Reactivate Confirmation Dialog */}
+      <Dialog
+        open={!!suspendDialogTenant}
+        onOpenChange={(open) => !open && setSuspendDialogTenant(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {suspendDialogTenant?.is_suspended ? 'Reactivate' : 'Suspend'} Tenant
+            </DialogTitle>
+            <DialogDescription>
+              {suspendDialogTenant?.is_suspended
+                ? `Are you sure you want to reactivate "${suspendDialogTenant?.name}"? Their staff will be able to access the admin panel again.`
+                : `Are you sure you want to suspend "${suspendDialogTenant?.name}"? Their staff will be unable to access the admin panel until reactivated.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSuspendDialogTenant(null)}>
+              Cancel
+            </Button>
             <Button
-              onClick={handleCreateTenant}
-              disabled={createTenantMutation.isPending}
+              variant={suspendDialogTenant?.is_suspended ? 'default' : 'destructive'}
+              onClick={handleSuspendConfirm}
+              disabled={suspendMutation.isPending}
             >
-              {createTenantMutation.isPending ? "Creating..." : "Create Tenant"}
+              {suspendMutation.isPending
+                ? 'Processing...'
+                : suspendDialogTenant?.is_suspended
+                  ? 'Reactivate'
+                  : 'Suspend'}
             </Button>
           </DialogFooter>
         </DialogContent>

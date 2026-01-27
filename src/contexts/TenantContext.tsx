@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
+import { useImpersonation } from './ImpersonationContext';
 
 export interface TenantContextValue {
   /** Current tenant ID - null for super admins when viewing globally */
@@ -8,6 +9,8 @@ export interface TenantContextValue {
   tenantIds: string[];
   /** Whether the user is a super admin (can access all tenants) */
   isSuperAdmin: boolean;
+  /** Whether currently impersonating a tenant */
+  isImpersonating: boolean;
   /** Whether tenant context is required for data access */
   requiresTenantScope: boolean;
   /** Check if user has access to a specific tenant */
@@ -19,20 +22,27 @@ export interface TenantContextValue {
 const TenantContext = createContext<TenantContextValue | null>(null);
 
 export function TenantProvider({ children }: { children: ReactNode }) {
-  const { tenantId, tenantIds, isSuperAdmin, setCurrentTenant } = useAuth();
+  const { tenantId: authTenantId, tenantIds, isSuperAdmin, setCurrentTenant } = useAuth();
+  const { isImpersonating, impersonatedTenant } = useImpersonation();
+  
+  // Use impersonated tenant ID if super admin is impersonating
+  const effectiveTenantId = isSuperAdmin && isImpersonating && impersonatedTenant
+    ? impersonatedTenant.id
+    : authTenantId;
 
   const value = useMemo<TenantContextValue>(() => ({
-    tenantId,
+    tenantId: effectiveTenantId,
     tenantIds,
     isSuperAdmin,
-    // Super admins don't require tenant scope when viewing globally
-    requiresTenantScope: !isSuperAdmin,
+    isImpersonating,
+    // Super admins don't require tenant scope when viewing globally (not impersonating)
+    requiresTenantScope: !isSuperAdmin || isImpersonating,
     hasAccessToTenant: (id: string) => {
       if (isSuperAdmin) return true;
       return tenantIds.includes(id);
     },
     setCurrentTenant,
-  }), [tenantId, tenantIds, isSuperAdmin, setCurrentTenant]);
+  }), [effectiveTenantId, tenantIds, isSuperAdmin, isImpersonating, setCurrentTenant]);
 
   return (
     <TenantContext.Provider value={value}>
@@ -54,10 +64,10 @@ export function useTenant() {
  * Returns the tenant ID to filter by, or undefined for super admins viewing globally
  */
 export function useTenantFilter(): string | undefined {
-  const { tenantId, isSuperAdmin } = useTenant();
+  const { tenantId, isSuperAdmin, isImpersonating } = useTenant();
   
-  // Super admins can view all data when no tenant is selected
-  if (isSuperAdmin && !tenantId) {
+  // Super admins can view all data when no tenant is selected and not impersonating
+  if (isSuperAdmin && !tenantId && !isImpersonating) {
     return undefined;
   }
   
