@@ -17,15 +17,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useCreateUser } from '@/hooks/useUserManagement';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, UserPlus, Copy, Check, AlertCircle } from 'lucide-react';
+import { Loader2, UserPlus, Copy, Check, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface CreateUserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tenantId?: string | null;
+}
+
+// Generate a random password
+function generatePassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%&*';
+  const array = new Uint8Array(12);
+  crypto.getRandomValues(array);
+  return Array.from(array, (byte) => chars[byte % chars.length]).join('');
 }
 
 export default function CreateUserDialog({
@@ -35,7 +44,9 @@ export default function CreateUserDialog({
 }: CreateUserDialogProps) {
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
-  const [password, setPassword] = useState('1234abcd');
+  const [password, setPassword] = useState(generatePassword());
+  const [showPassword, setShowPassword] = useState(false);
+  const [autoGenerate, setAutoGenerate] = useState(true);
   const [role, setRole] = useState<'admin' | 'staff'>('staff');
   const [tempPassword, setTempPassword] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -64,12 +75,21 @@ export default function CreateUserDialog({
       return;
     }
 
+    if (!tenantId) {
+      toast({
+        title: 'No tenant context',
+        description: 'Cannot create user without tenant context.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
-      const result = await createUser.mutateAsync({ email, fullName, role, password, tenantId: tenantId || undefined });
+      const result = await createUser.mutateAsync({ email, fullName, role, password });
       setTempPassword(result.password || password);
       toast({
         title: 'User created',
-        description: 'User has been created successfully.',
+        description: `${fullName} has been added as ${role === 'admin' ? 'an Admin' : 'Staff'}.`,
       });
     } catch (error) {
       toast({
@@ -88,14 +108,32 @@ export default function CreateUserDialog({
     }
   };
 
+  const handleGenerateNew = () => {
+    const newPassword = generatePassword();
+    setPassword(newPassword);
+  };
+
   const handleClose = () => {
     setEmail('');
     setFullName('');
-    setPassword('1234abcd');
+    setPassword(generatePassword());
+    setShowPassword(false);
+    setAutoGenerate(true);
     setRole('staff');
     setTempPassword(null);
     setCopied(false);
     onOpenChange(false);
+  };
+
+  const handleCreateAnother = () => {
+    setEmail('');
+    setFullName('');
+    setPassword(generatePassword());
+    setShowPassword(false);
+    setAutoGenerate(true);
+    setRole('staff');
+    setTempPassword(null);
+    setCopied(false);
   };
 
   return (
@@ -107,7 +145,7 @@ export default function CreateUserDialog({
             Create New User
           </DialogTitle>
           <DialogDescription>
-            Add a new admin or staff member to the system.
+            Add a new admin or staff member. They'll be able to log in immediately.
           </DialogDescription>
         </DialogHeader>
 
@@ -118,47 +156,45 @@ export default function CreateUserDialog({
               <AlertDescription>
                 <p className="font-medium mb-2">User created successfully!</p>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Share this temporary password securely with the user. They should
-                  change it after their first login.
+                  Share these credentials securely with <strong>{fullName}</strong>. They should
+                  change their password after first login.
                 </p>
-                <div className="flex items-center gap-2 bg-background p-2 rounded border">
-                  <code className="flex-1 text-sm font-mono break-all">
-                    {tempPassword}
-                  </code>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleCopyPassword}
-                    className="shrink-0"
-                  >
-                    {copied ? (
-                      <Check className="h-4 w-4 text-primary" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </Button>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 bg-background p-2 rounded border">
+                    <span className="text-xs text-muted-foreground w-16">Email:</span>
+                    <code className="flex-1 text-sm font-mono break-all">{email}</code>
+                  </div>
+                  <div className="flex items-center gap-2 bg-background p-2 rounded border">
+                    <span className="text-xs text-muted-foreground w-16">Password:</span>
+                    <code className="flex-1 text-sm font-mono break-all">{tempPassword}</code>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCopyPassword}
+                      className="shrink-0"
+                    >
+                      {copied ? (
+                        <Check className="h-4 w-4 text-primary" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </AlertDescription>
             </Alert>
 
             <DialogFooter>
-              <Button onClick={handleClose}>Done</Button>
+              <Button variant="outline" onClick={handleClose}>
+                Done
+              </Button>
+              <Button onClick={handleCreateAnother}>
+                Create Another
+              </Button>
             </DialogFooter>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="user@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="fullName">Full Name</Label>
               <Input
@@ -172,19 +208,15 @@ export default function CreateUserDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
-                id="password"
-                type="text"
-                placeholder="Password for new user"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                id="email"
+                type="email"
+                placeholder="user@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
-                minLength={6}
               />
-              <p className="text-xs text-muted-foreground">
-                Default password is 1234abcd. User should change it after first login.
-              </p>
             </div>
 
             <div className="space-y-2">
@@ -200,6 +232,71 @@ export default function CreateUserDialog({
               </Select>
               <p className="text-xs text-muted-foreground">
                 Admins can manage users, menu, and settings. Staff can only manage orders.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="auto-generate" className="text-xs text-muted-foreground cursor-pointer">
+                    Auto-generate
+                  </Label>
+                  <Switch
+                    id="auto-generate"
+                    checked={autoGenerate}
+                    onCheckedChange={(checked) => {
+                      setAutoGenerate(checked);
+                      if (checked) {
+                        setPassword(generatePassword());
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  readOnly={autoGenerate}
+                  required
+                  minLength={6}
+                  className="pr-20"
+                />
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                  {autoGenerate && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={handleGenerateNew}
+                    >
+                      New
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {autoGenerate
+                  ? 'A secure password has been generated. You can reveal it or generate a new one.'
+                  : 'Enter a password for the user (minimum 6 characters).'}
               </p>
             </div>
 

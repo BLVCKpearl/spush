@@ -7,27 +7,37 @@ export interface ManagedUser {
   email: string | null;
   display_name: string | null;
   is_active: boolean;
+  is_archived: boolean;
   created_at: string;
   role: 'admin' | 'staff' | null;
   tenant_role: 'tenant_admin' | 'staff' | null;
   venue_id: string | null;
 }
 
+export type StatusFilter = 'active' | 'inactive' | 'all';
+
+interface UseUsersOptions {
+  statusFilter?: StatusFilter;
+  includeCurrentUser?: boolean;
+}
+
 /**
- * Tenant-scoped users hook
+ * Tenant-scoped users hook with proper filtering
+ * Shows ACTIVE users by default, with option to include inactive/archived
  */
-export function useUsers(tenantId: string | null) {
+export function useUsers(tenantId: string | null, options: UseUsersOptions = {}) {
+  const { statusFilter = 'active', includeCurrentUser = true } = options;
+  
   return useQuery({
-    queryKey: ['managed-users', tenantId],
+    queryKey: ['managed-users', tenantId, statusFilter],
     queryFn: async () => {
-      if (!tenantId) return [];
+      if (!tenantId) return { users: [], diagnostics: { totalInTenant: 0, filtered: 0, reason: 'No tenant context' } };
       
-      // Fetch profiles for this tenant
-      const { data: profiles, error: profilesError } = await supabase
+      // Fetch ALL profiles for this tenant to provide diagnostics
+      const { data: allProfiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('user_id, email, display_name, is_active, created_at, venue_id')
+        .select('user_id, email, display_name, is_active, is_archived, created_at, venue_id')
         .eq('venue_id', tenantId)
-        .eq('is_archived', false)
         .order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
@@ -41,17 +51,45 @@ export function useUsers(tenantId: string | null) {
       if (rolesError) throw rolesError;
 
       // Merge profiles with roles
-      const users: ManagedUser[] = (profiles || []).map((profile) => {
+      const allUsers: ManagedUser[] = (allProfiles || []).map((profile) => {
         const userRole = roles?.find((r) => r.user_id === profile.user_id);
         return {
           ...profile,
+          is_archived: profile.is_archived || false,
           role: userRole?.role || null,
           tenant_role: userRole?.tenant_role || null,
         };
       });
 
-      // Filter to only show users with tenant roles
-      return users.filter((u) => u.tenant_role !== null);
+      // Only include users who have a tenant role assignment
+      const usersWithRoles = allUsers.filter((u) => u.tenant_role !== null);
+      const totalInTenant = usersWithRoles.length;
+
+      // Apply status filter
+      let filteredUsers = usersWithRoles;
+      let filterReason = '';
+      
+      switch (statusFilter) {
+        case 'active':
+          filteredUsers = usersWithRoles.filter((u) => u.is_active && !u.is_archived);
+          filterReason = 'Showing active users only';
+          break;
+        case 'inactive':
+          filteredUsers = usersWithRoles.filter((u) => !u.is_active || u.is_archived);
+          filterReason = 'Showing inactive/archived users only';
+          break;
+        case 'all':
+          filterReason = 'Showing all users';
+          break;
+      }
+
+      const diagnostics = {
+        totalInTenant,
+        filtered: totalInTenant - filteredUsers.length,
+        reason: filterReason,
+      };
+
+      return { users: filteredUsers, diagnostics };
     },
     enabled: !!tenantId,
   });
@@ -66,7 +104,7 @@ export function useAllUsers() {
     queryFn: async () => {
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('user_id, email, display_name, is_active, created_at, venue_id')
+        .select('user_id, email, display_name, is_active, is_archived, created_at, venue_id')
         .eq('is_archived', false)
         .order('created_at', { ascending: false });
 
@@ -82,6 +120,7 @@ export function useAllUsers() {
         const userRole = roles?.find((r) => r.user_id === profile.user_id);
         return {
           ...profile,
+          is_archived: profile.is_archived || false,
           role: userRole?.role || null,
           tenant_role: userRole?.tenant_role || null,
         };
@@ -113,15 +152,18 @@ export function useCreateUser() {
       fullName,
       role,
       password,
-      tenantId: overrideTenantId,
     }: {
       email: string;
       fullName: string;
       role: 'admin' | 'staff';
       password: string;
-      tenantId?: string;
     }) => {
-      const effectiveTenantId = overrideTenantId || tenantId;
+      // CRITICAL: Always use the tenant context's tenantId, never allow override
+      const effectiveTenantId = tenantId;
+      
+      if (!effectiveTenantId) {
+        throw new Error('Tenant context required to create users');
+      }
       
       // Validate tenant mutation for impersonation safety
       validateTenantMutation(effectiveTenantId);
@@ -147,8 +189,8 @@ export function useCreateUser() {
 
       return data as { success: boolean; userId: string; password: string };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['managed-users'] });
+    onSuccess: (_, __, context) => {
+      queryClient.invalidateQueries({ queryKey: ['managed-users', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['all-managed-users'] });
     },
   });
@@ -198,7 +240,7 @@ export function useUpdateUser() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['managed-users'] });
+      queryClient.invalidateQueries({ queryKey: ['managed-users', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['all-managed-users'] });
     },
   });
@@ -232,7 +274,7 @@ export function useResetPassword() {
       return data as { success: boolean; temporaryPassword: string };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['managed-users'] });
+      queryClient.invalidateQueries({ queryKey: ['managed-users', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['all-managed-users'] });
     },
   });
@@ -266,7 +308,7 @@ export function useDeactivateUser() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['managed-users'] });
+      queryClient.invalidateQueries({ queryKey: ['managed-users', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['all-managed-users'] });
     },
   });
@@ -300,7 +342,7 @@ export function useArchiveUser() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['managed-users'] });
+      queryClient.invalidateQueries({ queryKey: ['managed-users', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['all-managed-users'] });
     },
   });
@@ -347,7 +389,7 @@ export function useDeleteUser() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['managed-users'] });
+      queryClient.invalidateQueries({ queryKey: ['managed-users', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['all-managed-users'] });
     },
   });

@@ -11,9 +11,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useUsers, useUpdateUser, type ManagedUser } from '@/hooks/useUserManagement';
-import { useStaffInvitations, useDeleteInvitation } from '@/hooks/useStaffInvitations';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useUsers, useUpdateUser, type ManagedUser, type StatusFilter } from '@/hooks/useUserManagement';
+import { useTenant } from '@/contexts/TenantContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
@@ -25,9 +31,8 @@ import {
   UserCog,
   CheckCircle2,
   XCircle,
-  Mail,
-  Clock,
-  Trash2,
+  AlertCircle,
+  Info,
 } from 'lucide-react';
 import CreateUserDialog from '@/components/admin/users/CreateUserDialog';
 import EditUserDialog from '@/components/admin/users/EditUserDialog';
@@ -35,24 +40,26 @@ import ResetPasswordDialog from '@/components/admin/users/ResetPasswordDialog';
 import ModifyPasswordDialog from '@/components/admin/users/ModifyPasswordDialog';
 import DeleteUserDialog from '@/components/admin/users/DeleteUserDialog';
 import UserActionsDropdown from '@/components/admin/users/UserActionsDropdown';
-import InviteStaffDialog from '@/components/admin/users/InviteStaffDialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function AdminUsersPage() {
-  const { tenantId, isSuperAdmin, isTenantAdmin, user: currentUser } = useAuth();
+  const { tenantId, isImpersonating } = useTenant();
+  const { isSuperAdmin, isTenantAdmin, user: currentUser } = useAuth();
   const isAdmin = isTenantAdmin || isSuperAdmin;
   
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [modifyPasswordDialogOpen, setModifyPasswordDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
 
-  // Scope users query to current tenant
-  const { data: users, isLoading, error } = useUsers(tenantId);
-  const { data: invitations, isLoading: invitationsLoading } = useStaffInvitations(tenantId);
-  const deleteInvitation = useDeleteInvitation();
+  // Scope users query to current tenant with status filter
+  const { data, isLoading, error } = useUsers(tenantId, { statusFilter });
+  const users = data?.users || [];
+  const diagnostics = data?.diagnostics;
+  
   const updateUser = useUpdateUser();
   const { toast } = useToast();
 
@@ -123,8 +130,16 @@ export default function AdminUsersPage() {
     return <Badge variant="outline">None</Badge>;
   };
 
-  const getStatusBadge = (isActive: boolean) => {
-    if (isActive) {
+  const getStatusBadge = (user: ManagedUser) => {
+    if (user.is_archived) {
+      return (
+        <Badge variant="outline" className="gap-1 text-muted-foreground">
+          <XCircle className="h-3 w-3" />
+          Archived
+        </Badge>
+      );
+    }
+    if (user.is_active) {
       return (
         <Badge variant="outline" className="gap-1 text-primary border-primary/30">
           <CheckCircle2 className="h-3 w-3" />
@@ -141,39 +156,19 @@ export default function AdminUsersPage() {
   };
 
   // Show message if no tenant is selected
-  if (!tenantId && !isSuperAdmin) {
+  if (!tenantId) {
     return (
       <AdminLayout title="User Management" adminOnly>
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
-            No tenant context available.
+            <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>No tenant context available.</p>
+            <p className="text-sm">Please ensure you're logged in with proper tenant access.</p>
           </CardContent>
         </Card>
       </AdminLayout>
     );
   }
-
-  const handleDeleteInvitation = async (invitationId: string) => {
-    if (!tenantId) return;
-    try {
-      await deleteInvitation.mutateAsync({ invitationId, tenantId });
-      toast({
-        title: 'Invitation deleted',
-        description: 'The invitation has been cancelled.',
-      });
-    } catch (error) {
-      toast({
-        title: 'Failed to delete invitation',
-        description: error instanceof Error ? error.message : 'An error occurred',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  // Pending invitations (not accepted, not expired)
-  const pendingInvitations = invitations?.filter(
-    (inv) => !inv.accepted_at && new Date(inv.expires_at) > new Date()
-  ) ?? [];
 
   return (
     <AdminLayout title="User Management" adminOnly>
@@ -183,181 +178,154 @@ export default function AdminUsersPage() {
           <p className="text-muted-foreground">
             Create and manage admin and staff accounts.
           </p>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setInviteDialogOpen(true)} disabled={!tenantId}>
-              <Mail className="h-4 w-4 mr-2" />
-              Invite Staff
-            </Button>
-            <Button onClick={() => setCreateDialogOpen(true)} disabled={!tenantId}>
-              <UserPlus className="h-4 w-4 mr-2" />
-              Create User
-            </Button>
-          </div>
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <UserPlus className="h-4 w-4 mr-2" />
+            Create User
+          </Button>
         </div>
 
-        <Tabs defaultValue="users" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="users">Users ({users?.length || 0})</TabsTrigger>
-            <TabsTrigger value="invitations">
-              Pending Invitations ({pendingInvitations.length})
-            </TabsTrigger>
-          </TabsList>
+        {/* Impersonation notice */}
+        {isImpersonating && (
+          <Alert className="border-primary/50 bg-primary/5">
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              You are managing users for this tenant via impersonation. All actions are logged.
+            </AlertDescription>
+          </Alert>
+        )}
 
-          <TabsContent value="users">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Team Members</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : error ? (
-                  <div className="text-center py-12 text-destructive">
-                    Failed to load users. Please try again.
-                  </div>
-                ) : !users?.length ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No users found.</p>
-                    <p className="text-sm">Create your first user or send an invitation.</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Created</TableHead>
-                          <TableHead className="w-[50px]"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {users.map((user) => (
-                          <TableRow key={user.user_id}>
-                            <TableCell className="font-medium">
-                              {user.display_name || '—'}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {user.email}
-                            </TableCell>
-                            <TableCell>{getRoleBadge(user)}</TableCell>
-                            <TableCell>{getStatusBadge(user.is_active)}</TableCell>
-                            <TableCell className="text-muted-foreground text-sm">
-                              {formatDistanceToNow(new Date(user.created_at), {
-                                addSuffix: true,
-                              })}
-                            </TableCell>
-                            <TableCell>
-                              <UserActionsDropdown
-                                user={user}
-                                currentUserId={currentUser?.id ?? ''}
-                                isAdmin={isAdmin}
-                                activeAdminCount={activeAdminCount}
-                                onEdit={() => handleEdit(user)}
-                                onResetPassword={() => handleResetPassword(user)}
-                                onModifyPassword={() => handleModifyPassword(user)}
-                                onToggleActive={() => handleToggleActive(user)}
-                                onDelete={() => handleDelete(user)}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <CardTitle className="text-lg">Team Members</CardTitle>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Show:</span>
+              <Select
+                value={statusFilter}
+                onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active only</SelectItem>
+                  <SelectItem value="inactive">Inactive only</SelectItem>
+                  <SelectItem value="all">All users</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* Diagnostics info */}
+            {diagnostics && diagnostics.filtered > 0 && (
+              <Alert className="mb-4 border-muted">
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  {diagnostics.reason}. {diagnostics.filtered} user(s) filtered out.
+                  {statusFilter !== 'all' && (
+                    <Button
+                      variant="link"
+                      className="h-auto p-0 ml-1"
+                      onClick={() => setStatusFilter('all')}
+                    >
+                      Show all
+                    </Button>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
 
-          <TabsContent value="invitations">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Pending Invitations</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {invitationsLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : !pendingInvitations.length ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No pending invitations.</p>
-                    <p className="text-sm">Click "Invite Staff" to send an invitation.</p>
-                  </div>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : error ? (
+              <div className="text-center py-12 text-destructive">
+                Failed to load users. Please try again.
+              </div>
+            ) : !users?.length ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No users found.</p>
+                {statusFilter !== 'all' ? (
+                  <p className="text-sm">
+                    Try changing the filter to see more users, or{' '}
+                    <Button
+                      variant="link"
+                      className="h-auto p-0"
+                      onClick={() => setCreateDialogOpen(true)}
+                    >
+                      create a new user
+                    </Button>
+                    .
+                  </p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead>Expires</TableHead>
-                          <TableHead>Sent</TableHead>
-                          <TableHead className="w-[50px]"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {pendingInvitations.map((invitation) => (
-                          <TableRow key={invitation.id}>
-                            <TableCell className="font-medium">
-                              {invitation.email}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="secondary" className="gap-1">
-                                {invitation.role === 'tenant_admin' ? (
-                                  <>
-                                    <Shield className="h-3 w-3" />
-                                    Admin
-                                  </>
-                                ) : (
-                                  <>
-                                    <UserCog className="h-3 w-3" />
-                                    Staff
-                                  </>
-                                )}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="gap-1">
-                                <Clock className="h-3 w-3" />
-                                {formatDistanceToNow(new Date(invitation.expires_at), {
-                                  addSuffix: true,
-                                })}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground text-sm">
-                              {formatDistanceToNow(new Date(invitation.created_at), {
-                                addSuffix: true,
-                              })}
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDeleteInvitation(invitation.id)}
-                                disabled={deleteInvitation.isPending}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <p className="text-sm">
+                    <Button
+                      variant="link"
+                      className="h-auto p-0"
+                      onClick={() => setCreateDialogOpen(true)}
+                    >
+                      Create your first user
+                    </Button>
+                    .
+                  </p>
                 )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {users.map((user) => (
+                      <TableRow key={user.user_id}>
+                        <TableCell className="font-medium">
+                          {user.display_name || '—'}
+                          {user.user_id === currentUser?.id && (
+                            <Badge variant="outline" className="ml-2 text-xs">
+                              You
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {user.email}
+                        </TableCell>
+                        <TableCell>{getRoleBadge(user)}</TableCell>
+                        <TableCell>{getStatusBadge(user)}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {formatDistanceToNow(new Date(user.created_at), {
+                            addSuffix: true,
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          <UserActionsDropdown
+                            user={user}
+                            currentUserId={currentUser?.id ?? ''}
+                            isAdmin={isAdmin}
+                            activeAdminCount={activeAdminCount}
+                            onEdit={() => handleEdit(user)}
+                            onResetPassword={() => handleResetPassword(user)}
+                            onModifyPassword={() => handleModifyPassword(user)}
+                            onToggleActive={() => handleToggleActive(user)}
+                            onDelete={() => handleDelete(user)}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Dialogs */}
@@ -365,11 +333,6 @@ export default function AdminUsersPage() {
         open={createDialogOpen} 
         onOpenChange={setCreateDialogOpen}
         tenantId={tenantId}
-      />
-      <InviteStaffDialog
-        open={inviteDialogOpen}
-        onOpenChange={setInviteDialogOpen}
-        tenantId={tenantId || ''}
       />
       <EditUserDialog
         open={editDialogOpen}

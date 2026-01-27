@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface ImpersonatedTenant {
   id: string;
@@ -46,6 +47,7 @@ async function logImpersonationEvent(
 
 export function ImpersonationProvider({ children }: { children: ReactNode }) {
   const { user, isSuperAdmin } = useAuth();
+  const queryClient = useQueryClient();
   
   const [impersonatedTenant, setImpersonatedTenant] = useState<ImpersonatedTenant | null>(() => {
     // Restore from sessionStorage on mount
@@ -71,9 +73,20 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
     // Log impersonation start
     await logImpersonationEvent(user.id, 'impersonation_start', tenant.id, tenant.name);
     
+    // Clear all tenant-scoped queries to ensure fresh data for the new tenant
+    // This prevents showing cached data from a previous tenant
+    queryClient.removeQueries({ queryKey: ['managed-users'] });
+    queryClient.removeQueries({ queryKey: ['staff-invitations'] });
+    queryClient.removeQueries({ queryKey: ['bank-details'] });
+    queryClient.removeQueries({ queryKey: ['audit-logs'] });
+    queryClient.removeQueries({ queryKey: ['tables'] });
+    queryClient.removeQueries({ queryKey: ['menu'] });
+    queryClient.removeQueries({ queryKey: ['orders'] });
+    queryClient.removeQueries({ queryKey: ['onboarding-status'] });
+    
     setImpersonatedTenant(tenant);
     sessionStorage.setItem(IMPERSONATED_TENANT_KEY, JSON.stringify(tenant));
-  }, [user, isSuperAdmin]);
+  }, [user, isSuperAdmin, queryClient]);
 
   const stopImpersonation = useCallback(async (): Promise<string | null> => {
     const storedReturnUrl = sessionStorage.getItem(IMPERSONATION_RETURN_URL_KEY);
@@ -83,6 +96,16 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
       await logImpersonationEvent(user.id, 'impersonation_end', impersonatedTenant.id, impersonatedTenant.name);
     }
     
+    // Clear all tenant-scoped queries when stopping impersonation
+    queryClient.removeQueries({ queryKey: ['managed-users'] });
+    queryClient.removeQueries({ queryKey: ['staff-invitations'] });
+    queryClient.removeQueries({ queryKey: ['bank-details'] });
+    queryClient.removeQueries({ queryKey: ['audit-logs'] });
+    queryClient.removeQueries({ queryKey: ['tables'] });
+    queryClient.removeQueries({ queryKey: ['menu'] });
+    queryClient.removeQueries({ queryKey: ['orders'] });
+    queryClient.removeQueries({ queryKey: ['onboarding-status'] });
+    
     setImpersonatedTenant(null);
     setReturnUrl(null);
     sessionStorage.removeItem(IMPERSONATED_TENANT_KEY);
@@ -90,7 +113,7 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
 
     // Return the stored URL so the caller can navigate
     return storedReturnUrl;
-  }, [user, impersonatedTenant]);
+  }, [user, impersonatedTenant, queryClient]);
 
   const value = useMemo<ImpersonationContextValue>(() => ({
     isImpersonating: !!impersonatedTenant,
