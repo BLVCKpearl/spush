@@ -264,19 +264,18 @@ export default function TrackOrderPage() {
               </Card>
             )}
 
-            {/* Payment Status Message for Bank Transfer */}
+            {/* Transfer Initiated Status for Bank Transfer */}
             {isBankTransfer && !order.payment_confirmed && !isExpired && hasClaim && (
-              <Card className="bg-primary/5 border-primary">
+              <Card className="bg-emerald-50 border-emerald-200 dark:bg-emerald-950 dark:border-emerald-800">
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-full bg-primary/10">
-                      <ChefHat className="h-5 w-5 text-primary" />
+                    <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-900">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                     </div>
                     <div>
-                      <p className="font-medium text-primary">Preparing Your Order</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Your order is being prepared in the kitchen while we confirm your payment. 
-                        You'll be notified once payment is verified.
+                      <p className="font-medium text-emerald-900 dark:text-emerald-100">Transfer Initiated</p>
+                      <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-1">
+                        Your order is being prepared in the kitchen while we confirm your payment.
                       </p>
                     </div>
                   </div>

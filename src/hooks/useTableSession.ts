@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface TableSession {
+  tenantId: string;  // Same as venueId - for multi-tenant consistency
   venueId: string;
   tableId: string;
   tableLabel: string;
@@ -93,6 +94,7 @@ export function useTableSession() {
       }
 
       const newSession: TableSession = {
+        tenantId: venue.id,  // tenantId === venueId for consistency
         venueId: venue.id,
         tableId: table.id,
         tableLabel: table.label,
