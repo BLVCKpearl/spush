@@ -12,6 +12,7 @@ interface CreateUserRequest {
   fullName: string;
   role: "admin" | "staff";
   password?: string;
+  tenantId?: string; // Optional - will be overridden by actor's tenant for tenant admins
 }
 
 interface UpdateUserRequest {
@@ -19,22 +20,33 @@ interface UpdateUserRequest {
   userId: string;
   fullName?: string;
   role?: "admin" | "staff";
+  tenantRole?: "tenant_admin" | "staff";
   isActive?: boolean;
+  tenantId?: string;
 }
 
 interface ResetPasswordRequest {
   action: "reset_password";
   userId: string;
+  tenantId?: string;
 }
 
 interface DeactivateUserRequest {
   action: "deactivate";
   userId: string;
+  tenantId?: string;
 }
 
 interface DeleteUserRequest {
   action: "delete";
   userId: string;
+  tenantId?: string;
+}
+
+interface ArchiveUserRequest {
+  action: "archive";
+  userId: string;
+  tenantId?: string;
 }
 
 interface SetPasswordRequest {
@@ -64,6 +76,7 @@ type UserManagementRequest =
   | SetPasswordRequest
   | ServiceRolePasswordRequest
   | DeleteUserRequest
+  | ArchiveUserRequest
   | BootstrapSuperAdminRequest;
 
 // Generate a secure random password
@@ -219,40 +232,95 @@ Deno.serve(async (req) => {
     }
     
     const actorUserId = claimsData.claims.sub as string;
-    const actorUser = { id: actorUserId };
 
-    // Check if actor is admin
+    // Check if actor is super admin
+    const { data: superAdminCheck } = await supabaseAdmin
+      .from("super_admins")
+      .select("id")
+      .eq("user_id", actorUserId)
+      .maybeSingle();
+    
+    const isSuperAdmin = !!superAdminCheck;
+
+    // Check actor's tenant roles
     const { data: actorRoles } = await supabaseAdmin
       .from("user_roles")
-      .select("role")
-      .eq("user_id", actorUser.id);
+      .select("role, tenant_role, tenant_id")
+      .eq("user_id", actorUserId);
 
     const isAdmin = actorRoles?.some((r) => r.role === "admin");
-    if (!isAdmin) {
+    const isTenantAdmin = actorRoles?.some((r) => r.tenant_role === "tenant_admin");
+    
+    // Get actor's tenant ID (for tenant admins)
+    const actorTenantId = actorRoles?.find((r) => r.tenant_id)?.tenant_id;
+    
+    if (!isSuperAdmin && !isAdmin && !isTenantAdmin) {
       return new Response(
         JSON.stringify({ error: "Admin access required" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Helper to log audit action
+    // Determine effective tenant ID for the operation
+    // For super admins, use the provided tenantId (impersonation)
+    // For tenant admins, always use their own tenant (server-side enforcement)
+    function getEffectiveTenantId(requestedTenantId?: string): string | null {
+      if (isSuperAdmin) {
+        return requestedTenantId || null;
+      }
+      // Tenant admins MUST use their own tenant - ignore client-provided tenantId
+      return actorTenantId || null;
+    }
+
+    // Helper to check if actor can manage target user
+    async function canManageUser(targetUserId: string): Promise<{ allowed: boolean; error?: string }> {
+      // Super admins can manage anyone
+      if (isSuperAdmin) return { allowed: true };
+      
+      // Get target user's tenant
+      const { data: targetProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("venue_id")
+        .eq("user_id", targetUserId)
+        .single();
+      
+      if (!targetProfile) {
+        return { allowed: false, error: "User not found" };
+      }
+      
+      // Tenant admins can only manage users in their tenant
+      if (targetProfile.venue_id !== actorTenantId) {
+        return { allowed: false, error: "Cannot manage users outside your tenant" };
+      }
+      
+      return { allowed: true };
+    }
+
+    // Helper to log audit action with tenant context
     async function logAudit(
       action: string,
       targetUserId: string | null,
+      tenantId: string | null,
       metadata: Record<string, unknown> = {}
     ) {
       await supabaseAdmin.from("admin_audit_logs").insert({
         actor_user_id: actorUserId,
         action,
         target_user_id: targetUserId,
-        metadata,
+        tenant_id: tenantId,
+        metadata: {
+          ...metadata,
+          is_super_admin: isSuperAdmin,
+          is_impersonation: isSuperAdmin && !!tenantId,
+        },
       });
     }
 
     // Handle different actions
     switch (body.action) {
       case "create": {
-        const { email, fullName, role, password: customPassword } = body;
+        const { email, fullName, role, password: customPassword, tenantId: requestedTenantId } = body;
+        const effectiveTenantId = getEffectiveTenantId(requestedTenantId);
 
         // Validate input
         if (!email || !fullName || !role) {
@@ -265,6 +333,14 @@ Deno.serve(async (req) => {
         if (!["admin", "staff"].includes(role)) {
           return new Response(
             JSON.stringify({ error: "Invalid role" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Tenant admins MUST have a tenant context
+        if (!isSuperAdmin && !effectiveTenantId) {
+          return new Response(
+            JSON.stringify({ error: "Tenant context required" }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
@@ -303,16 +379,28 @@ Deno.serve(async (req) => {
           );
         }
 
-        // The profile will be created by the trigger, but update display_name
-        await supabaseAdmin
-          .from("profiles")
-          .update({ display_name: fullName })
-          .eq("user_id", newUser.user.id);
+        // Create profile with venue_id (tenant_id)
+        const { error: profileError } = await supabaseAdmin.from("profiles").upsert({
+          user_id: newUser.user.id,
+          email,
+          display_name: fullName,
+          venue_id: effectiveTenantId,
+          is_active: true,
+        }, { onConflict: 'user_id' });
 
-        // Assign role
+        if (profileError) {
+          console.error("Error creating profile:", profileError);
+        }
+
+        // Map role to tenant_role
+        const tenantRole = role === "admin" ? "tenant_admin" : "staff";
+
+        // Assign role with tenant context
         const { error: roleError } = await supabaseAdmin.from("user_roles").insert({
           user_id: newUser.user.id,
           role,
+          tenant_id: effectiveTenantId,
+          tenant_role: tenantRole,
         });
 
         if (roleError) {
@@ -325,8 +413,12 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Log audit
-        await logAudit("user_created", newUser.user.id, { email, role });
+        // Log audit with tenant context
+        await logAudit("user_created", newUser.user.id, effectiveTenantId, { 
+          email, 
+          role,
+          tenant_role: tenantRole,
+        });
 
         return new Response(
           JSON.stringify({
@@ -340,12 +432,22 @@ Deno.serve(async (req) => {
       }
 
       case "update": {
-        const { userId, fullName, role, isActive } = body;
+        const { userId, fullName, role, tenantRole, isActive, tenantId: requestedTenantId } = body;
+        const effectiveTenantId = getEffectiveTenantId(requestedTenantId);
 
         if (!userId) {
           return new Response(
             JSON.stringify({ error: "User ID is required" }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Check if actor can manage this user
+        const canManage = await canManageUser(userId);
+        if (!canManage.allowed) {
+          return new Response(
+            JSON.stringify({ error: canManage.error }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
 
@@ -363,22 +465,32 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Check last-admin protection
-        if (isActive === false || role === "staff") {
+        const userTenantId = targetProfile.venue_id || effectiveTenantId;
+
+        // Check last-tenant-admin protection
+        const newTenantRole = tenantRole || (role === "admin" ? "tenant_admin" : role === "staff" ? "staff" : undefined);
+        
+        if (isActive === false || newTenantRole === "staff") {
+          // Get current user's role
           const { data: targetRoles } = await supabaseAdmin
             .from("user_roles")
-            .select("role")
-            .eq("user_id", userId);
+            .select("tenant_role, tenant_id")
+            .eq("user_id", userId)
+            .eq("tenant_id", userTenantId)
+            .maybeSingle();
 
-          const isTargetAdmin = targetRoles?.some((r) => r.role === "admin");
+          const isCurrentlyTenantAdmin = targetRoles?.tenant_role === "tenant_admin";
 
-          if (isTargetAdmin) {
-            const { data: adminCount } = await supabaseAdmin.rpc("count_active_admins");
+          if (isCurrentlyTenantAdmin && userTenantId) {
+            // Check how many active tenant admins exist for this tenant
+            const { data: adminCount } = await supabaseAdmin.rpc("count_active_tenant_admins", {
+              _tenant_id: userTenantId,
+            });
 
             if (adminCount <= 1) {
               return new Response(
                 JSON.stringify({
-                  error: "Cannot deactivate or demote the last active admin",
+                  error: "Cannot deactivate or demote the last active tenant admin",
                 }),
                 { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
               );
@@ -406,16 +518,37 @@ Deno.serve(async (req) => {
         }
 
         // Update role if provided
-        if (role !== undefined) {
-          // Remove existing roles
-          await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+        if (role !== undefined || tenantRole !== undefined) {
+          const finalRole = role || "staff";
+          const finalTenantRole = tenantRole || (role === "admin" ? "tenant_admin" : "staff");
+          
+          // Update existing role for this tenant
+          const { data: existingRole } = await supabaseAdmin
+            .from("user_roles")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("tenant_id", userTenantId)
+            .maybeSingle();
 
-          // Add new role
-          await supabaseAdmin.from("user_roles").insert({ user_id: userId, role });
+          if (existingRole) {
+            await supabaseAdmin
+              .from("user_roles")
+              .update({ role: finalRole, tenant_role: finalTenantRole })
+              .eq("id", existingRole.id);
+          } else {
+            await supabaseAdmin.from("user_roles").insert({
+              user_id: userId,
+              role: finalRole,
+              tenant_id: userTenantId,
+              tenant_role: finalTenantRole,
+            });
+          }
         }
 
-        // Log audit
-        await logAudit("user_updated", userId, { changes: { fullName, role, isActive } });
+        // Log audit with tenant context
+        await logAudit("user_updated", userId, userTenantId, { 
+          changes: { fullName, role, tenantRole, isActive } 
+        });
 
         return new Response(
           JSON.stringify({ success: true, message: "User updated successfully" }),
@@ -424,12 +557,22 @@ Deno.serve(async (req) => {
       }
 
       case "reset_password": {
-        const { userId } = body;
+        const { userId, tenantId: requestedTenantId } = body;
+        const effectiveTenantId = getEffectiveTenantId(requestedTenantId);
 
         if (!userId) {
           return new Response(
             JSON.stringify({ error: "User ID is required" }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Check if actor can manage this user
+        const canManage = await canManageUser(userId);
+        if (!canManage.allowed) {
+          return new Response(
+            JSON.stringify({ error: canManage.error }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
 
@@ -476,8 +619,8 @@ Deno.serve(async (req) => {
           p_target_user_id: userId,
         });
 
-        // Log audit
-        await logAudit("password_reset", userId, { forced_change: true });
+        // Log audit with tenant context
+        await logAudit("password_reset", userId, effectiveTenantId, { forced_change: true });
 
         return new Response(
           JSON.stringify({
@@ -490,7 +633,8 @@ Deno.serve(async (req) => {
       }
 
       case "deactivate": {
-        const { userId } = body;
+        const { userId, tenantId: requestedTenantId } = body;
+        const effectiveTenantId = getEffectiveTenantId(requestedTenantId);
 
         if (!userId) {
           return new Response(
@@ -499,20 +643,40 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Check last-admin protection
+        // Check if actor can manage this user
+        const canManage = await canManageUser(userId);
+        if (!canManage.allowed) {
+          return new Response(
+            JSON.stringify({ error: canManage.error }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Get user's tenant for last-admin check
+        const { data: targetProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("venue_id")
+          .eq("user_id", userId)
+          .single();
+
+        const userTenantId = targetProfile?.venue_id || effectiveTenantId;
+
+        // Check last-tenant-admin protection
         const { data: targetRoles } = await supabaseAdmin
           .from("user_roles")
-          .select("role")
-          .eq("user_id", userId);
+          .select("tenant_role")
+          .eq("user_id", userId)
+          .eq("tenant_id", userTenantId)
+          .maybeSingle();
 
-        const isTargetAdmin = targetRoles?.some((r) => r.role === "admin");
-
-        if (isTargetAdmin) {
-          const { data: adminCount } = await supabaseAdmin.rpc("count_active_admins");
+        if (targetRoles?.tenant_role === "tenant_admin" && userTenantId) {
+          const { data: adminCount } = await supabaseAdmin.rpc("count_active_tenant_admins", {
+            _tenant_id: userTenantId,
+          });
 
           if (adminCount <= 1) {
             return new Response(
-              JSON.stringify({ error: "Cannot deactivate the last active admin" }),
+              JSON.stringify({ error: "Cannot deactivate the last active tenant admin" }),
               { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
@@ -524,11 +688,89 @@ Deno.serve(async (req) => {
           .update({ is_active: false })
           .eq("user_id", userId);
 
-        // Log audit
-        await logAudit("user_deactivated", userId, {});
+        // Log audit with tenant context
+        await logAudit("user_deactivated", userId, userTenantId, {});
 
         return new Response(
           JSON.stringify({ success: true, message: "User deactivated successfully" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      case "archive": {
+        const { userId, tenantId: requestedTenantId } = body;
+        const effectiveTenantId = getEffectiveTenantId(requestedTenantId);
+
+        if (!userId) {
+          return new Response(
+            JSON.stringify({ error: "User ID is required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Prevent self-archive
+        if (userId === actorUserId) {
+          return new Response(
+            JSON.stringify({ error: "Cannot archive your own account" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Check if actor can manage this user
+        const canManage = await canManageUser(userId);
+        if (!canManage.allowed) {
+          return new Response(
+            JSON.stringify({ error: canManage.error }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Get user's tenant for last-admin check
+        const { data: targetProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("venue_id")
+          .eq("user_id", userId)
+          .single();
+
+        const userTenantId = targetProfile?.venue_id || effectiveTenantId;
+
+        // Check last-tenant-admin protection
+        const { data: targetRoles } = await supabaseAdmin
+          .from("user_roles")
+          .select("tenant_role")
+          .eq("user_id", userId)
+          .eq("tenant_id", userTenantId)
+          .maybeSingle();
+
+        if (targetRoles?.tenant_role === "tenant_admin" && userTenantId) {
+          const { data: adminCount } = await supabaseAdmin.rpc("count_active_tenant_admins", {
+            _tenant_id: userTenantId,
+          });
+
+          if (adminCount <= 1) {
+            return new Response(
+              JSON.stringify({ error: "Cannot archive the last active tenant admin" }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+
+        // Archive user (soft delete)
+        await supabaseAdmin
+          .from("profiles")
+          .update({ 
+            is_active: false, 
+            is_archived: true,
+            archived_at: new Date().toISOString(),
+            archived_by: actorUserId,
+          })
+          .eq("user_id", userId);
+
+        // Log audit with tenant context
+        await logAudit("user_archived", userId, userTenantId, {});
+
+        return new Response(
+          JSON.stringify({ success: true, message: "User archived successfully" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -550,6 +792,22 @@ Deno.serve(async (req) => {
           );
         }
 
+        // Check if actor can manage this user
+        const canManage = await canManageUser(userId);
+        if (!canManage.allowed) {
+          return new Response(
+            JSON.stringify({ error: canManage.error }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Get user's tenant for audit
+        const { data: targetProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("venue_id")
+          .eq("user_id", userId)
+          .single();
+
         // Update user password
         const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
           password,
@@ -563,8 +821,8 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Log audit
-        await logAudit("password_modified", userId, {});
+        // Log audit with tenant context
+        await logAudit("password_modified", userId, targetProfile?.venue_id || null, {});
 
         return new Response(
           JSON.stringify({
@@ -576,7 +834,8 @@ Deno.serve(async (req) => {
       }
 
       case "delete": {
-        const { userId } = body as DeleteUserRequest;
+        const { userId, tenantId: requestedTenantId } = body as DeleteUserRequest;
+        const effectiveTenantId = getEffectiveTenantId(requestedTenantId);
 
         if (!userId) {
           return new Response(
@@ -593,10 +852,19 @@ Deno.serve(async (req) => {
           );
         }
 
+        // Check if actor can manage this user
+        const canManage = await canManageUser(userId);
+        if (!canManage.allowed) {
+          return new Response(
+            JSON.stringify({ error: canManage.error }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
         // Check if target user exists
         const { data: targetProfile } = await supabaseAdmin
           .from("profiles")
-          .select("user_id, email, display_name")
+          .select("user_id, email, display_name, venue_id")
           .eq("user_id", userId)
           .single();
 
@@ -607,20 +875,24 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Check last-admin protection
+        const userTenantId = targetProfile.venue_id || effectiveTenantId;
+
+        // Check last-tenant-admin protection
         const { data: targetRoles } = await supabaseAdmin
           .from("user_roles")
-          .select("role")
-          .eq("user_id", userId);
+          .select("tenant_role")
+          .eq("user_id", userId)
+          .eq("tenant_id", userTenantId)
+          .maybeSingle();
 
-        const isTargetAdmin = targetRoles?.some((r) => r.role === "admin");
-
-        if (isTargetAdmin) {
-          const { data: adminCount } = await supabaseAdmin.rpc("count_active_admins");
+        if (targetRoles?.tenant_role === "tenant_admin" && userTenantId) {
+          const { data: adminCount } = await supabaseAdmin.rpc("count_active_tenant_admins", {
+            _tenant_id: userTenantId,
+          });
 
           if (adminCount <= 1) {
             return new Response(
-              JSON.stringify({ error: "Cannot delete the last remaining admin" }),
+              JSON.stringify({ error: "Cannot delete the last remaining tenant admin" }),
               { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
@@ -647,11 +919,11 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Log audit with email snapshot for historical reference
-        await logAudit("USER_DELETED", userId, { 
+        // Log audit with tenant context
+        await logAudit("USER_DELETED", userId, userTenantId, { 
           email_snapshot: emailSnapshot,
           display_name_snapshot: displayNameSnapshot,
-          was_admin: isTargetAdmin 
+          was_tenant_admin: targetRoles?.tenant_role === "tenant_admin",
         });
 
         return new Response(

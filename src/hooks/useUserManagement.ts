@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useTenant } from '@/contexts/TenantContext';
 
 export interface ManagedUser {
   user_id: string;
@@ -26,6 +27,7 @@ export function useUsers(tenantId: string | null) {
         .from('profiles')
         .select('user_id, email, display_name, is_active, created_at, venue_id')
         .eq('venue_id', tenantId)
+        .eq('is_archived', false)
         .order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
@@ -65,6 +67,7 @@ export function useAllUsers() {
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('user_id, email, display_name, is_active, created_at, venue_id')
+        .eq('is_archived', false)
         .order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
@@ -89,8 +92,20 @@ export function useAllUsers() {
   });
 }
 
+/**
+ * Hook to get tenant context for mutations
+ */
+function useTenantContext() {
+  try {
+    return useTenant();
+  } catch {
+    return { tenantId: null, isImpersonating: false, validateTenantMutation: () => {}, logImpersonationAction: async () => {} };
+  }
+}
+
 export function useCreateUser() {
   const queryClient = useQueryClient();
+  const { tenantId, isImpersonating, validateTenantMutation, logImpersonationAction } = useTenantContext();
 
   return useMutation({
     mutationFn: async ({
@@ -98,7 +113,7 @@ export function useCreateUser() {
       fullName,
       role,
       password,
-      tenantId,
+      tenantId: overrideTenantId,
     }: {
       email: string;
       fullName: string;
@@ -106,6 +121,11 @@ export function useCreateUser() {
       password: string;
       tenantId?: string;
     }) => {
+      const effectiveTenantId = overrideTenantId || tenantId;
+      
+      // Validate tenant mutation for impersonation safety
+      validateTenantMutation(effectiveTenantId);
+
       const { data, error } = await supabase.functions.invoke('manage-users', {
         body: {
           action: 'create',
@@ -113,12 +133,17 @@ export function useCreateUser() {
           fullName,
           role,
           password,
-          tenantId,
+          tenantId: effectiveTenantId,
         },
       });
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+
+      // Log impersonation action if applicable
+      if (isImpersonating) {
+        await logImpersonationAction('user_created', { email, role });
+      }
 
       return data as { success: boolean; userId: string; password: string };
     },
@@ -131,31 +156,44 @@ export function useCreateUser() {
 
 export function useUpdateUser() {
   const queryClient = useQueryClient();
+  const { tenantId, isImpersonating, validateTenantMutation, logImpersonationAction } = useTenantContext();
 
   return useMutation({
     mutationFn: async ({
       userId,
       fullName,
       role,
+      tenantRole,
       isActive,
     }: {
       userId: string;
       fullName?: string;
       role?: 'admin' | 'staff';
+      tenantRole?: 'tenant_admin' | 'staff';
       isActive?: boolean;
     }) => {
+      // Validate tenant mutation for impersonation safety
+      validateTenantMutation(tenantId);
+
       const { data, error } = await supabase.functions.invoke('manage-users', {
         body: {
           action: 'update',
           userId,
           fullName,
           role,
+          tenantRole,
           isActive,
+          tenantId,
         },
       });
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+
+      // Log impersonation action if applicable
+      if (isImpersonating) {
+        await logImpersonationAction('user_updated', { userId, changes: { fullName, role, tenantRole, isActive } });
+      }
 
       return data;
     },
@@ -168,18 +206,28 @@ export function useUpdateUser() {
 
 export function useResetPassword() {
   const queryClient = useQueryClient();
+  const { tenantId, isImpersonating, validateTenantMutation, logImpersonationAction } = useTenantContext();
 
   return useMutation({
     mutationFn: async (userId: string) => {
+      // Validate tenant mutation for impersonation safety
+      validateTenantMutation(tenantId);
+
       const { data, error } = await supabase.functions.invoke('manage-users', {
         body: {
           action: 'reset_password',
           userId,
+          tenantId,
         },
       });
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+
+      // Log impersonation action if applicable
+      if (isImpersonating) {
+        await logImpersonationAction('password_reset', { userId });
+      }
 
       return data as { success: boolean; temporaryPassword: string };
     },
@@ -192,18 +240,62 @@ export function useResetPassword() {
 
 export function useDeactivateUser() {
   const queryClient = useQueryClient();
+  const { tenantId, isImpersonating, validateTenantMutation, logImpersonationAction } = useTenantContext();
 
   return useMutation({
     mutationFn: async (userId: string) => {
+      // Validate tenant mutation for impersonation safety
+      validateTenantMutation(tenantId);
+
       const { data, error } = await supabase.functions.invoke('manage-users', {
         body: {
           action: 'deactivate',
           userId,
+          tenantId,
         },
       });
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+
+      // Log impersonation action if applicable
+      if (isImpersonating) {
+        await logImpersonationAction('user_deactivated', { userId });
+      }
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['managed-users'] });
+      queryClient.invalidateQueries({ queryKey: ['all-managed-users'] });
+    },
+  });
+}
+
+export function useArchiveUser() {
+  const queryClient = useQueryClient();
+  const { tenantId, isImpersonating, validateTenantMutation, logImpersonationAction } = useTenantContext();
+
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      // Validate tenant mutation for impersonation safety
+      validateTenantMutation(tenantId);
+
+      const { data, error } = await supabase.functions.invoke('manage-users', {
+        body: {
+          action: 'archive',
+          userId,
+          tenantId,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      // Log impersonation action if applicable
+      if (isImpersonating) {
+        await logImpersonationAction('user_archived', { userId });
+      }
 
       return data;
     },
@@ -216,9 +308,13 @@ export function useDeactivateUser() {
 
 export function useDeleteUser() {
   const queryClient = useQueryClient();
+  const { tenantId, isImpersonating, validateTenantMutation, logImpersonationAction } = useTenantContext();
 
   return useMutation({
     mutationFn: async (userId: string) => {
+      // Validate tenant mutation for impersonation safety
+      validateTenantMutation(tenantId);
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
 
@@ -227,6 +323,7 @@ export function useDeleteUser() {
           body: {
             action: 'delete',
             userId,
+            tenantId,
           },
         });
 
@@ -234,6 +331,11 @@ export function useDeleteUser() {
 
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
+
+        // Log impersonation action if applicable
+        if (isImpersonating) {
+          await logImpersonationAction('user_deleted', { userId });
+        }
 
         return data;
       } catch (err) {
