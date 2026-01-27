@@ -178,16 +178,21 @@ export default function AdminUsersPage() {
   return (
     <AdminLayout title="User Management" adminOnly>
       <div className="space-y-6">
-        {/* Actions */}
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => setInviteDialogOpen(true)} disabled={!tenantId}>
-            <Mail className="h-4 w-4 mr-2" />
-            Invite Staff
-          </Button>
-          <Button onClick={() => setCreateDialogOpen(true)} disabled={!tenantId}>
-            <UserPlus className="h-4 w-4 mr-2" />
-            Create User
-          </Button>
+        {/* Header */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-muted-foreground">
+            Create and manage admin and staff accounts.
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setInviteDialogOpen(true)} disabled={!tenantId}>
+              <Mail className="h-4 w-4 mr-2" />
+              Invite Staff
+            </Button>
+            <Button onClick={() => setCreateDialogOpen(true)} disabled={!tenantId}>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Create User
+            </Button>
+          </div>
         </div>
 
         <Tabs defaultValue="users" className="space-y-4">
