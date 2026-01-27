@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { useOnboardingStatus } from "@/hooks/useOnboardingStatus";
 import AuthLoadingScreen from "./AuthLoadingScreen";
 
@@ -10,6 +11,7 @@ interface OnboardingGuardProps {
 export function OnboardingGuard({ children }: OnboardingGuardProps) {
   const location = useLocation();
   const { isAuthenticated, isSuperAdmin, loading } = useAuth();
+  const { isImpersonating } = useTenant();
   const { data: onboardingStatus, isLoading: onboardingLoading } = useOnboardingStatus();
 
   // Don't guard the onboarding page itself
@@ -20,7 +22,9 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
   if (loading || onboardingLoading) {
     return <AuthLoadingScreen authState="loading_profile" />;
   }
-  if (isSuperAdmin) {
+
+  // Super admins bypass unless impersonating (where they can complete onboarding for tenant)
+  if (isSuperAdmin && !isImpersonating) {
     return <>{children}</>;
   }
 

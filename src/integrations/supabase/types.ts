@@ -519,6 +519,7 @@ export type Database = {
           must_change_password: boolean
           onboarding_completed: boolean
           onboarding_completed_at: string | null
+          onboarding_step: number | null
           updated_at: string
           user_id: string
           venue_id: string | null
@@ -535,6 +536,7 @@ export type Database = {
           must_change_password?: boolean
           onboarding_completed?: boolean
           onboarding_completed_at?: string | null
+          onboarding_step?: number | null
           updated_at?: string
           user_id: string
           venue_id?: string | null
@@ -551,6 +553,7 @@ export type Database = {
           must_change_password?: boolean
           onboarding_completed?: boolean
           onboarding_completed_at?: string | null
+          onboarding_step?: number | null
           updated_at?: string
           user_id?: string
           venue_id?: string | null
@@ -855,6 +858,10 @@ export type Database = {
       count_active_tenant_admins: {
         Args: { _tenant_id: string }
         Returns: number
+      }
+      create_default_categories: {
+        Args: { p_venue_id: string }
+        Returns: undefined
       }
       expire_pending_orders: { Args: never; Returns: number }
       generate_invitation_token: { Args: never; Returns: string }

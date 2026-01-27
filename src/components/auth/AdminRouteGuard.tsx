@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useImpersonation } from '@/contexts/ImpersonationContext';
 import { usePermissions, type Permission } from '@/hooks/usePermissions';
 import { useTenantSuspension } from '@/hooks/useTenantSuspension';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,6 +9,7 @@ import AuthErrorScreen, { type AuthDiagnostics } from './AuthErrorScreen';
 import AuthLoadingScreen from './AuthLoadingScreen';
 import ForbiddenScreen from './ForbiddenScreen';
 import SuspendedScreen from './SuspendedScreen';
+import { toast } from '@/hooks/use-toast';
 
 interface AdminRouteGuardProps {
   children: React.ReactNode;
@@ -43,8 +45,10 @@ export default function AdminRouteGuard({
     hardRefresh,
     isAuthenticated,
     diagnostics,
-    isSuperAdmin
+    isSuperAdmin,
+    loading
   } = useAuth();
+  const { isImpersonating } = useImpersonation();
   const permissions = usePermissions();
   const { isSuspended, venueName, isLoading: suspensionLoading } = useTenantSuspension();
   const navigate = useNavigate();
@@ -53,6 +57,23 @@ export default function AdminRouteGuard({
   const [profileCheckError, setProfileCheckError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const hasLoggedInvalidRole = useRef(false);
+  const hasRedirectedSuperAdmin = useRef(false);
+
+  // Block SUPER_ADMIN from /admin/* unless impersonating
+  useEffect(() => {
+    if (loading || authState !== 'ready') return;
+    if (!isAuthenticated) return;
+    
+    if (isSuperAdmin && !isImpersonating && !hasRedirectedSuperAdmin.current) {
+      hasRedirectedSuperAdmin.current = true;
+      toast({
+        title: "Impersonation Required",
+        description: "Please select a tenant to manage via impersonation.",
+        variant: "destructive",
+      });
+      navigate("/super-admin/impersonation", { replace: true });
+    }
+  }, [isSuperAdmin, isImpersonating, isAuthenticated, loading, authState, navigate]);
 
   // Fast redirect for no session
   useEffect(() => {
