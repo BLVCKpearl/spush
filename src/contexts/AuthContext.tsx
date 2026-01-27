@@ -397,9 +397,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn: AuthContextValue["signIn"] = async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (!error) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (!error && data.user) {
+      // Log successful login to audit_logs
+      try {
+        await supabase.from("admin_audit_logs").insert({
+          action: "login_success",
+          actor_user_id: data.user.id,
+          metadata: {
+            email: data.user.email,
+            timestamp: new Date().toISOString(),
+          },
+        });
+      } catch {
+        // Silently fail - audit logging shouldn't block auth
+        console.warn("Failed to log login event");
+      }
       checkAuth();
+    } else if (error) {
+      // Log failed login attempt
+      try {
+        await supabase.from("admin_audit_logs").insert({
+          action: "login_failed",
+          actor_user_id: "00000000-0000-0000-0000-000000000000",
+          metadata: {
+            email,
+            error: error.message,
+            timestamp: new Date().toISOString(),
+          },
+        });
+      } catch {
+        // Silently fail
+      }
     }
     return { error: error ?? null };
   };

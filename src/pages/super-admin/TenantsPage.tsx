@@ -94,8 +94,8 @@ export default function TenantsPage() {
     setNewTenantSlug(slug);
   };
 
-  const handleImpersonate = (tenant: ManagedTenant) => {
-    startImpersonation({
+  const handleImpersonate = async (tenant: ManagedTenant) => {
+    await startImpersonation({
       id: tenant.id,
       name: tenant.name,
       venue_slug: tenant.venue_slug,
@@ -106,7 +106,11 @@ export default function TenantsPage() {
   const handleSuspendConfirm = () => {
     if (!suspendDialogTenant) return;
     suspendMutation.mutate(
-      { tenantId: suspendDialogTenant.id, suspend: !suspendDialogTenant.is_suspended },
+      { 
+        tenantId: suspendDialogTenant.id, 
+        suspend: !suspendDialogTenant.is_suspended,
+        tenantName: suspendDialogTenant.name 
+      },
       { onSuccess: () => setSuspendDialogTenant(null) }
     );
   };
