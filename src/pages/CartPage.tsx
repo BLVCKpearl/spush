@@ -14,16 +14,10 @@ export default function CartPage() {
   const { session } = useTableSession();
   const { 
     items, 
-    tableNumber,
-    tableSession,
     updateQuantity, 
     removeItem, 
     getTotalKobo 
   } = useCart();
-
-  // Use session from context or hook
-  const currentSession = tableSession || session;
-  const hasValidSession = currentSession || tableNumber;
 
   const handleUpdateQuantity = useCallback((itemId: string, quantity: number) => {
     updateQuantity(itemId, quantity);
@@ -34,17 +28,15 @@ export default function CartPage() {
   }, [removeItem]);
 
   const handleBack = useCallback(() => {
-    if (currentSession) {
-      navigate(`/menu/${currentSession.venueSlug}`);
-    } else if (tableNumber) {
-      navigate(`/order?table=${tableNumber}`);
+    if (session) {
+      navigate(`/menu/${session.venueSlug}`);
     } else {
-      navigate(-1);
+      navigate('/');
     }
-  }, [navigate, currentSession, tableNumber]);
+  }, [navigate, session]);
 
   // Redirect if no valid session
-  if (!hasValidSession) {
+  if (!session) {
     return (
       <div className="min-h-screen bg-background p-4">
         <div className="text-center py-12">
@@ -65,7 +57,7 @@ export default function CartPage() {
         <GuestHeader 
           title="Your Cart" 
           showBack 
-          backUrl={currentSession ? `/menu/${currentSession.venueSlug}` : '/'} 
+          backUrl={`/menu/${session.venueSlug}`} 
         />
         <div className="text-center py-12 px-4">
           <ShoppingBag className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -77,18 +69,14 @@ export default function CartPage() {
   }
 
   const totalKobo = getTotalKobo();
-  const displayLocation = currentSession 
-    ? currentSession.tableLabel 
-    : `Table ${tableNumber}`;
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Consistent Guest Header */}
       <GuestHeader 
         title="Your Cart" 
-        subtitle={displayLocation}
+        subtitle={session.tableLabel}
         showBack 
-        backUrl={currentSession ? `/menu/${currentSession.venueSlug}` : '/'} 
+        backUrl={`/menu/${session.venueSlug}`} 
       />
 
       {/* Cart Items */}

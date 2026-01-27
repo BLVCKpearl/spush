@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
+import { useTableSession } from '@/hooks/useTableSession';
 import { useCategories, useMenuItems } from '@/hooks/useMenu';
 import { formatNaira } from '@/lib/currency';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,11 +15,10 @@ export default function OrderPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const tableParam = searchParams.get('table');
+  const { session } = useTableSession();
   
   const { 
     items: cartItems, 
-    tableNumber, 
-    setTableNumber, 
     addItem, 
     updateQuantity,
     getTotalItems,
@@ -29,16 +28,8 @@ export default function OrderPage() {
   const { data: categories, isLoading: categoriesLoading } = useCategories();
   const { data: menuItems, isLoading: menuLoading } = useMenuItems();
 
-  useEffect(() => {
-    if (tableParam) {
-      const table = parseInt(tableParam, 10);
-      if (!isNaN(table) && table > 0) {
-        setTableNumber(table);
-      }
-    }
-  }, [tableParam, setTableNumber]);
-
-  if (!tableNumber) {
+  // This is a legacy page - redirect to proper flow if no session
+  if (!session && !tableParam) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
@@ -87,12 +78,14 @@ export default function OrderPage() {
     );
   }
 
+  // Get display info from session or fallback to table param
+  const tableLabel = session?.tableLabel || `Table ${tableParam}`;
+
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Consistent Guest Header */}
       <GuestHeader 
         title="Menu" 
-        subtitle={`Table ${tableNumber}`}
+        subtitle={tableLabel}
         rightContent={
           <Badge variant="secondary" className="text-sm">
             {getTotalItems()} items
