@@ -24,9 +24,9 @@ export default function AdminLoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (authState === 'ready' && isAuthenticated) {
-      // Super admins go straight to dashboard
+      // Super admins go to their exclusive dashboard
       if (isSuperAdmin) {
-        navigate('/admin/orders');
+        navigate('/super-admin/tenants');
         return;
       }
       

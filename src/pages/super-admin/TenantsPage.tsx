@@ -248,7 +248,11 @@ export default function TenantsPage() {
                 </TableRow>
               ) : (
                 filteredTenants?.map((tenant) => (
-                  <TableRow key={tenant.id} className={tenant.is_suspended ? 'opacity-60' : ''}>
+                  <TableRow 
+                    key={tenant.id} 
+                    className={`cursor-pointer hover:bg-muted/50 ${tenant.is_suspended ? 'opacity-60' : ''}`}
+                    onClick={() => navigate(`/super-admin/tenants/${tenant.id}`)}
+                  >
                     <TableCell className="font-medium">{tenant.name}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">{tenant.venue_slug}</Badge>
@@ -259,7 +263,7 @@ export default function TenantsPage() {
                     <TableCell className="text-muted-foreground text-sm">
                       {formatDistanceToNow(new Date(tenant.created_at), { addSuffix: true })}
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8">
