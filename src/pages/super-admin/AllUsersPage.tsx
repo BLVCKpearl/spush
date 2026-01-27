@@ -33,6 +33,7 @@ import {
 import { Search, Shield, ShieldCheck, User, MoreHorizontal, KeyRound, Ban, CheckCircle, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import UserProfileDialog from "@/components/super-admin/UserProfileDialog";
 
 interface UserWithRoles {
   id: string;
@@ -62,6 +63,7 @@ export default function AllUsersPage() {
   const [revokeDialogUser, setRevokeDialogUser] = useState<UserWithRoles | null>(null);
   const [resetDialogUser, setResetDialogUser] = useState<UserWithRoles | null>(null);
   const [changeRoleDialogUser, setChangeRoleDialogUser] = useState<UserWithRoles | null>(null);
+  const [profileDialogUser, setProfileDialogUser] = useState<UserWithRoles | null>(null);
 
   // Fetch all venues for filter dropdown
   const { data: venues } = useQuery({
@@ -314,6 +316,20 @@ export default function AllUsersPage() {
     return canManageUser(user) && user.roles?.some(r => r.tenant_role);
   };
 
+  const isStaffUser = (user: UserWithRoles) => {
+    // Check if user is a staff member (not super admin, not tenant admin)
+    if (user.is_super_admin) return false;
+    const hasTenantAdmin = user.roles?.some(r => r.tenant_role === "tenant_admin");
+    if (hasTenantAdmin) return false;
+    return user.roles?.some(r => r.tenant_role === "staff" || r.role === "staff");
+  };
+
+  const handleRowClick = (user: UserWithRoles) => {
+    if (isStaffUser(user)) {
+      setProfileDialogUser(user);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <PageTitle title="All Users" subtitle="View and manage users across all tenants" />
@@ -432,7 +448,11 @@ export default function AllUsersPage() {
                 </TableRow>
               ) : (
                 filteredUsers?.map((user) => (
-                  <TableRow key={user.id} className={!user.is_active ? "opacity-60" : ""}>
+                  <TableRow 
+                    key={user.id} 
+                    className={`${!user.is_active ? "opacity-60" : ""} ${isStaffUser(user) ? "cursor-pointer hover:bg-muted/50" : ""}`}
+                    onClick={() => handleRowClick(user)}
+                  >
                     <TableCell className="font-medium">
                       {user.display_name || "—"}
                     </TableCell>
@@ -465,7 +485,7 @@ export default function AllUsersPage() {
                     <TableCell className="text-muted-foreground text-sm">
                       {formatDistanceToNow(new Date(user.created_at), { addSuffix: true })}
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       {canManageUser(user) && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -625,6 +645,13 @@ export default function AllUsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* User Profile Dialog */}
+      <UserProfileDialog
+        user={profileDialogUser}
+        open={!!profileDialogUser}
+        onOpenChange={(open) => !open && setProfileDialogUser(null)}
+      />
     </div>
   );
 }
