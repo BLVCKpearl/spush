@@ -1,11 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Building2, Users, BarChart3, Settings, LogOut, ChefHat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NavLink } from "@/components/NavLink";
 import AuthLoadingScreen from "@/components/auth/AuthLoadingScreen";
-import ForbiddenScreen from "@/components/auth/ForbiddenScreen";
+import { toast } from "sonner";
 
 const navItems = [
   { to: "/super-admin/tenants", icon: Building2, label: "Tenants" },
@@ -18,6 +18,7 @@ export default function SuperAdminDashboard() {
   const { user, isSuperAdmin, loading, signOut, authState } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const hasRedirected = useRef(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -25,12 +26,22 @@ export default function SuperAdminDashboard() {
     }
   }, [loading, user, navigate]);
 
+  // Redirect non-super-admins to /admin with error message
+  useEffect(() => {
+    if (!loading && user && !isSuperAdmin && !hasRedirected.current) {
+      hasRedirected.current = true;
+      toast.error("Access denied. Super admin privileges required.");
+      navigate("/admin/orders", { replace: true });
+    }
+  }, [loading, user, isSuperAdmin, navigate]);
+
   if (loading || authState === "init" || authState === "checking_session" || authState === "loading_profile") {
     return <AuthLoadingScreen authState={authState} />;
   }
 
+  // Don't render anything while redirecting
   if (!isSuperAdmin) {
-    return <ForbiddenScreen />;
+    return <AuthLoadingScreen authState={authState} />;
   }
 
   const handleSignOut = async () => {
