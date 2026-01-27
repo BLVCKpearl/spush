@@ -105,7 +105,7 @@ export default function OrderConfirmationPage() {
       {/* Consistent Guest Header */}
       <GuestHeader 
         title="Order Confirmed" 
-        subtitle={`Table ${order.table_number}`}
+        subtitle={order.table_label || `Table ${order.table_number}`}
       />
 
       <main className="p-4 space-y-4 max-w-md mx-auto">

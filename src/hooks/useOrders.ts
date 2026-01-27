@@ -90,6 +90,20 @@ export function useOrders(tenantId?: string | null, status?: OrderStatus) {
           queryClient.invalidateQueries({ queryKey: ['orders', tenantId] });
         }
       )
+      // Also subscribe to payment_claims for instant "Transfer Initiated" updates
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'payment_claims',
+        },
+        () => {
+          // Invalidate payment claims queries so the badge appears instantly
+          queryClient.invalidateQueries({ queryKey: ['payment-claims'] });
+          queryClient.invalidateQueries({ queryKey: ['orders', tenantId] });
+        }
+      )
       .subscribe();
 
     return () => {
@@ -134,6 +148,22 @@ async function findExistingOrder(idempotencyKey: string): Promise<Order | null> 
   return data as Order | null;
 }
 
+// Check for existing unpaid order on the same table
+async function findExistingUnpaidOrder(tableId: string): Promise<Order | null> {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('table_id', tableId)
+    .in('status', ['pending_payment', 'cash_on_delivery'])
+    .maybeSingle();
+  
+  if (error) {
+    console.error('Unpaid order check failed:', error);
+    return null;
+  }
+  return data as Order | null;
+}
+
 export function useCreateOrder() {
   const queryClient = useQueryClient();
 
@@ -142,6 +172,7 @@ export function useCreateOrder() {
       venueId,
       tableId,
       tableNumber,
+      tableLabel,
       customerName,
       paymentMethod,
       items,
@@ -150,6 +181,7 @@ export function useCreateOrder() {
       venueId?: string;
       tableId?: string;
       tableNumber: number;
+      tableLabel?: string;
       customerName?: string;
       paymentMethod: PaymentMethod;
       items: CartItem[];
@@ -164,7 +196,18 @@ export function useCreateOrder() {
         }
       }
 
-      // 2. Check rate limit if we have a table ID
+      // 2. Check for existing unpaid order on this table (one bill per table rule)
+      if (tableId) {
+        const existingUnpaid = await findExistingUnpaidOrder(tableId);
+        if (existingUnpaid) {
+          // Return a special error that the UI can handle to redirect
+          const error = new Error('EXISTING_UNPAID_ORDER');
+          (error as any).existingOrderReference = existingUnpaid.order_reference;
+          throw error;
+        }
+      }
+
+      // 3. Check rate limit if we have a table ID
       if (tableId) {
         const allowed = await checkRateLimit(tableId);
         if (!allowed) {
@@ -179,13 +222,14 @@ export function useCreateOrder() {
 
       const initialStatus = paymentMethod === 'cash' ? 'cash_on_delivery' : 'pending_payment';
 
-      // 3. Create the order with venue_id for tenant scoping
+      // 4. Create the order with venue_id for tenant scoping and table_label snapshot
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
           venue_id: venueId || null,
           table_id: tableId || null,
           table_number: tableNumber,
+          table_label: tableLabel || null,
           customer_name: customerName || null,
           payment_method: paymentMethod,
           status: initialStatus,
@@ -206,7 +250,7 @@ export function useCreateOrder() {
         throw orderError;
       }
 
-      // 4. Create order items with snapshots
+      // 5. Create order items with snapshots
       const orderItems = items.map((item) => ({
         order_id: order.id,
         menu_item_id: item.menuItem.id,
@@ -225,7 +269,7 @@ export function useCreateOrder() {
 
       if (itemsError) throw itemsError;
 
-      // 5. Record rate limit entry
+      // 6. Record rate limit entry
       if (tableId) {
         await recordRateLimit(tableId);
       }

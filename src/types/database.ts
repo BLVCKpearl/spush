@@ -33,6 +33,7 @@ export interface Order {
   venue_id: string | null;
   table_id: string | null;
   table_number: number;
+  table_label: string | null;
   customer_name: string | null;
   status: OrderStatus;
   payment_method: PaymentMethod;

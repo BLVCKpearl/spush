@@ -55,6 +55,7 @@ export default function CheckoutPage() {
         venueId: session.venueId,
         tableId: session.tableId,
         tableNumber: effectiveTableNumber,
+        tableLabel: session.tableLabel, // Snapshot the table label
         customerName: customerName.trim() || undefined,
         paymentMethod,
         items,
@@ -69,6 +70,14 @@ export default function CheckoutPage() {
       navigate(`/order-confirmation/${order.order_reference}`);
     } catch (error: any) {
       console.error('Failed to place order:', error);
+      
+      // Handle existing unpaid order - redirect to track page
+      if (error?.message === 'EXISTING_UNPAID_ORDER' && error?.existingOrderReference) {
+        toast.error('You already have an unpaid bill for this table.');
+        navigate(`/track/${error.existingOrderReference}`);
+        return;
+      }
+      
       // Show specific error message for rate limiting
       if (error?.message?.includes('Too many orders')) {
         toast.error(error.message);
