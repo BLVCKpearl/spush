@@ -2,8 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import PageTitle from "@/components/layout/PageTitle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Building2, Users, ShoppingCart, DollarSign, TrendingUp } from "lucide-react";
+import { Building2, Users, ShoppingCart, DollarSign, TrendingUp, Loader2 } from "lucide-react";
 import { formatNaira } from "@/lib/currency";
 
 export default function GlobalAnalyticsPage() {
@@ -31,6 +32,42 @@ export default function GlobalAnalyticsPage() {
         orders: ordersResult.count || 0,
         revenue: totalRevenue,
       };
+    },
+  });
+
+  // Fetch revenue per tenant
+  const { data: revenueByTenant, isLoading: revenueLoading } = useQuery({
+    queryKey: ["super-admin-revenue-by-tenant"],
+    queryFn: async () => {
+      const { data: venues } = await supabase.from("venues").select("id, name");
+      
+      if (!venues) return [];
+
+      const results = await Promise.all(
+        venues.map(async (venue) => {
+          const { data: orders } = await supabase
+            .from("orders")
+            .select("total_kobo")
+            .eq("venue_id", venue.id)
+            .eq("payment_confirmed", true);
+
+          const { count: orderCount } = await supabase
+            .from("orders")
+            .select("id", { count: "exact", head: true })
+            .eq("venue_id", venue.id);
+
+          const revenue = orders?.reduce((sum, o) => sum + (o.total_kobo || 0), 0) || 0;
+
+          return {
+            id: venue.id,
+            name: venue.name,
+            orders: orderCount || 0,
+            revenue,
+          };
+        })
+      );
+
+      return results.sort((a, b) => b.revenue - a.revenue);
     },
   });
 
@@ -103,7 +140,7 @@ export default function GlobalAnalyticsPage() {
           <CardContent>
             <div className="text-2xl font-bold">{stats?.tenants || 0}</div>
             <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-              <TrendingUp className="h-3 w-3 text-green-500" />
+              <TrendingUp className="h-3 w-3 text-primary" />
               Active businesses
             </p>
           </CardContent>
@@ -211,6 +248,49 @@ export default function GlobalAnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Revenue Per Tenant Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Revenue by Tenant</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tenant</TableHead>
+                <TableHead className="text-right">Orders</TableHead>
+                <TableHead className="text-right">Revenue</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {revenueLoading ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                  </TableCell>
+                </TableRow>
+              ) : revenueByTenant?.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                    No revenue data
+                  </TableCell>
+                </TableRow>
+              ) : (
+                revenueByTenant?.map((tenant) => (
+                  <TableRow key={tenant.id}>
+                    <TableCell className="font-medium">{tenant.name}</TableCell>
+                    <TableCell className="text-right">{tenant.orders}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatNaira(tenant.revenue)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }

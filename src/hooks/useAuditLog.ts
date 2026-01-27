@@ -14,10 +14,16 @@ export type AuditAction =
   | 'user_created'
   | 'user_updated'
   | 'user_deleted'
+  | 'user_activated'
+  | 'user_deactivated'
+  | 'user_reactivated'
   | 'user_role_changed'
   | 'password_reset'
+  | 'password_reset_by_super_admin'
   | 'tenant_suspended'
   | 'tenant_reactivated'
+  | 'tenant_force_logout'
+  | 'tenant_archived'
   | 'feature_flag_changed'
   | 'invalid_role_access_attempt';
 
