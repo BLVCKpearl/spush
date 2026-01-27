@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useImpersonation } from '@/contexts/ImpersonationContext';
 import { supabase } from '@/integrations/supabase/client';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
@@ -10,6 +12,16 @@ import { Loader2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminAccountPage() {
+  const navigate = useNavigate();
+  const { isImpersonating } = useImpersonation();
+  
+  // Block access during impersonation
+  useEffect(() => {
+    if (isImpersonating) {
+      toast.error('Account settings are not available during impersonation');
+      navigate('/admin/orders');
+    }
+  }, [isImpersonating, navigate]);
   const { user } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');

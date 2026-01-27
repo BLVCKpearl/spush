@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useImpersonation } from '@/contexts/ImpersonationContext';
 import AdminRouteGuard from '@/components/auth/AdminRouteGuard';
 import PageTitle from '@/components/layout/PageTitle';
 import type { Permission } from '@/hooks/usePermissions';
@@ -55,6 +56,7 @@ export default function AdminLayout({
 }: AdminLayoutProps) {
   const { user, role, signOut } = useAuth();
   const permissions = usePermissions();
+  const { isImpersonating } = useImpersonation();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -63,7 +65,14 @@ export default function AdminLayout({
   };
 
   // Filter nav items based on permissions
-  const visibleNavItems = navItems.filter(item => permissions[item.permission]);
+  // Hide "Account" tab during impersonation (super admins shouldn't modify personal settings while impersonating)
+  const visibleNavItems = navItems.filter(item => {
+    // Hide Account during impersonation
+    if (isImpersonating && item.to === '/admin/account') {
+      return false;
+    }
+    return permissions[item.permission];
+  });
 
   return (
     <AdminRouteGuard requiredPermission={requiredPermission} adminOnly={adminOnly}>
