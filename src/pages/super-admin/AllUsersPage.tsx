@@ -67,6 +67,7 @@ export default function AllUsersPage() {
   const [editDialogUser, setEditDialogUser] = useState<UserWithRoles | null>(null);
   const [archiveDialogUser, setArchiveDialogUser] = useState<UserWithRoles | null>(null);
   const [profileDialogUser, setProfileDialogUser] = useState<UserWithRoles | null>(null);
+  const [editValidationError, setEditValidationError] = useState<string | null>(null);
 
   // Fetch all venues for filter dropdown
   const { data: venues } = useQuery({
@@ -197,7 +198,7 @@ export default function AllUsersPage() {
     },
   });
 
-  // Edit user mutation
+  // Edit user mutation with validation
   const editUserMutation = useMutation({
     mutationFn: async ({ 
       userId, 
@@ -214,6 +215,52 @@ export default function AllUsersPage() {
       const targetUser = users?.find(u => u.user_id === userId);
       const wasSuperAdmin = targetUser?.is_super_admin;
       const isSuperAdmin = roleType === "super_admin";
+
+      // VALIDATION: Check if demoting last super admin
+      if (wasSuperAdmin && !isSuperAdmin) {
+        const { count } = await supabase
+          .from("super_admins")
+          .select("*", { count: "exact", head: true });
+        
+        if ((count || 0) <= 1) {
+          throw new Error("Cannot change role: There must be at least one Super Admin at all times.");
+        }
+      }
+
+      // VALIDATION: Check if demoting last tenant admin of a tenant
+      const wasTenantAdmin = targetUser?.roles?.some(r => r.tenant_role === "tenant_admin");
+      const oldTenantId = targetUser?.roles?.find(r => r.tenant_role === "tenant_admin")?.tenant_id;
+      
+      if (wasTenantAdmin && oldTenantId) {
+        // Check if changing from tenant_admin to something else, or changing tenant
+        const isLeavingTenantAdmin = roleType !== "tenant_admin" || 
+          (roleType === "tenant_admin" && newTenantId !== oldTenantId);
+        
+        if (isLeavingTenantAdmin) {
+          const { data: tenantAdmins } = await supabase
+            .from("user_roles")
+            .select("user_id")
+            .eq("tenant_id", oldTenantId)
+            .eq("tenant_role", "tenant_admin");
+          
+          const activeTenantAdmins = await Promise.all(
+            (tenantAdmins || []).map(async (ta) => {
+              const { data: profile } = await supabase
+                .from("profiles")
+                .select("is_active")
+                .eq("user_id", ta.user_id)
+                .single();
+              return profile?.is_active ? ta : null;
+            })
+          );
+          
+          const activeCount = activeTenantAdmins.filter(Boolean).length;
+          
+          if (activeCount <= 1) {
+            throw new Error("Cannot change role: There must be at least one Tenant Admin per tenant.");
+          }
+        }
+      }
 
       // Update profile - clear venue_id for super admins
       const { error: profileError } = await supabase
@@ -303,9 +350,10 @@ export default function AllUsersPage() {
       queryClient.invalidateQueries({ queryKey: ["super-admin-all-users"] });
       toast.success("User updated successfully");
       setEditDialogUser(null);
+      setEditValidationError(null);
     },
     onError: (error) => {
-      toast.error(`Failed to update user: ${error.message}`);
+      setEditValidationError(error.message);
     },
   });
 
@@ -649,12 +697,19 @@ export default function AllUsersPage() {
       {/* Edit User Dialog */}
       <EditUserDialog
         open={!!editDialogUser}
-        onOpenChange={(open) => !open && setEditDialogUser(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditDialogUser(null);
+            setEditValidationError(null);
+          }
+        }}
         user={editDialogUser}
         onSave={async (data) => {
+          setEditValidationError(null);
           await editUserMutation.mutateAsync(data);
         }}
         isSaving={editUserMutation.isPending}
+        validationError={editValidationError}
       />
 
       {/* Revoke/Reactivate Confirmation Dialog */}
