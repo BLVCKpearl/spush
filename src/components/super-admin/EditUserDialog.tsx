@@ -44,6 +44,7 @@ interface EditUserDialogProps {
     tenantId: string | null;
   }) => Promise<void>;
   isSaving: boolean;
+  validationError?: string | null;
 }
 
 export default function EditUserDialog({
@@ -52,6 +53,7 @@ export default function EditUserDialog({
   user,
   onSave,
   isSaving,
+  validationError,
 }: EditUserDialogProps) {
   const [displayName, setDisplayName] = useState("");
   const [roleType, setRoleType] = useState<UserRoleType>("staff");
@@ -188,6 +190,15 @@ export default function EditUserDialog({
               <AlertTriangle className="h-4 w-4 text-primary" />
               <AlertDescription className="text-sm">
                 Super Admins are <strong>not assigned to any tenant</strong>. They have platform-wide access.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {validationError && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription className="text-sm">
+                {validationError}
               </AlertDescription>
             </Alert>
           )}
