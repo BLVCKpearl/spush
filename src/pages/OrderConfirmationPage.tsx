@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useOrder } from '@/hooks/useOrders';
 import { useBankDetails } from '@/hooks/useBankDetails';
@@ -8,9 +7,8 @@ import { formatNaira } from '@/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { PaymentClaimDialog } from '@/components/payment/PaymentClaimDialog';
+import { TransferInitiatedButton } from '@/components/payment/TransferInitiatedButton';
 import GuestHeader from '@/components/layout/GuestHeader';
-import PageTitle from '@/components/layout/PageTitle';
 import {
   CheckCircle2, 
   Clock, 
@@ -46,7 +44,6 @@ export default function OrderConfirmationPage() {
   const { data: order, isLoading } = useOrder(reference || '');
   const { data: bankDetails } = useBankDetails(order?.venue_id);
   const { data: paymentClaims } = usePaymentClaims(order?.id);
-  const [claimDialogOpen, setClaimDialogOpen] = useState(false);
 
   const hasClaim = paymentClaims && paymentClaims.length > 0;
 
@@ -276,19 +273,29 @@ export default function OrderConfirmationPage() {
 
         {/* I've Transferred Button for Bank Transfer */}
         {isBankTransfer && isPendingPayment && !hasClaim && (
-          <Card className="bg-primary/5 border-primary">
+          <TransferInitiatedButton 
+            orderId={order.id}
+            orderReference={order.order_reference}
+          />
+        )}
+
+        {/* Transfer Initiated Status */}
+        {isBankTransfer && isPendingPayment && hasClaim && (
+          <Card className="bg-emerald-50 border-emerald-200 dark:bg-emerald-950 dark:border-emerald-800">
             <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground mb-3">
-                Completed your bank transfer? Let us know so we can start preparing your order.
-              </p>
-              <Button
-                onClick={() => setClaimDialogOpen(true)}
-                className="w-full"
-                size="lg"
-              >
-                <CreditCard className="mr-2 h-5 w-5" />
-                I've Transferred
-              </Button>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-900">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-emerald-900 dark:text-emerald-100">
+                    Transfer Initiated
+                  </p>
+                  <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                    We've received your notification. Your order is being prepared while we confirm payment.
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -310,15 +317,6 @@ export default function OrderConfirmationPage() {
             Place Another Order
           </Button>
         </div>
-
-        {/* Payment Claim Dialog */}
-        <PaymentClaimDialog
-          open={claimDialogOpen}
-          onOpenChange={setClaimDialogOpen}
-          orderId={order.id}
-          orderReference={order.order_reference}
-          onSuccess={() => navigate(`/track/${order.order_reference}`)}
-        />
       </main>
     </div>
   );
