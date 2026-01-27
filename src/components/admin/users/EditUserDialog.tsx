@@ -26,15 +26,17 @@ interface EditUserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   user: ManagedUser | null;
+  activeAdminCount?: number;
 }
 
 export default function EditUserDialog({
   open,
   onOpenChange,
   user,
+  activeAdminCount = 0,
 }: EditUserDialogProps) {
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<'admin' | 'staff'>('staff');
+  const [tenantRole, setTenantRole] = useState<'tenant_admin' | 'staff'>('staff');
   const [isActive, setIsActive] = useState(true);
 
   const updateUser = useUpdateUser();
@@ -43,21 +45,38 @@ export default function EditUserDialog({
   useEffect(() => {
     if (user) {
       setFullName(user.display_name || '');
-      setRole(user.role || 'staff');
+      setTenantRole(user.tenant_role || 'staff');
       setIsActive(user.is_active);
     }
   }, [user]);
+
+  // Check if this is the last active tenant admin
+  const isLastTenantAdmin = 
+    user?.tenant_role === 'tenant_admin' && 
+    user?.is_active && 
+    activeAdminCount <= 1;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!user) return;
 
+    // Prevent demoting or deactivating last tenant admin
+    if (isLastTenantAdmin && (tenantRole === 'staff' || !isActive)) {
+      toast({
+        title: 'Cannot modify last admin',
+        description: 'There must be at least one active tenant admin.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       await updateUser.mutateAsync({
         userId: user.user_id,
         fullName,
-        role,
+        role: tenantRole === 'tenant_admin' ? 'admin' : 'staff',
+        tenantRole,
         isActive,
       });
       toast({
@@ -116,16 +135,28 @@ export default function EditUserDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="role">Role</Label>
-            <Select value={role} onValueChange={(v) => setRole(v as 'admin' | 'staff')}>
+            <Label htmlFor="tenantRole">Role</Label>
+            <Select 
+              value={tenantRole} 
+              onValueChange={(v) => setTenantRole(v as 'tenant_admin' | 'staff')}
+              disabled={isLastTenantAdmin}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="staff">Staff</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="tenant_admin">Admin</SelectItem>
               </SelectContent>
             </Select>
+            {isLastTenantAdmin && (
+              <p className="text-xs text-destructive">
+                Cannot change role - this is the last active admin.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Admins can manage users, menu, and settings. Staff can only manage orders.
+            </p>
           </div>
 
           <div className="flex items-center justify-between rounded-lg border p-3">
@@ -139,8 +170,14 @@ export default function EditUserDialog({
               id="isActive"
               checked={isActive}
               onCheckedChange={setIsActive}
+              disabled={isLastTenantAdmin}
             />
           </div>
+          {isLastTenantAdmin && !isActive && (
+            <p className="text-xs text-destructive">
+              Cannot deactivate - this is the last active admin.
+            </p>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

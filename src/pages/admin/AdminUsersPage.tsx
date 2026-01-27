@@ -375,6 +375,7 @@ export default function AdminUsersPage() {
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         user={selectedUser}
+        activeAdminCount={activeAdminCount}
       />
       <ResetPasswordDialog
         open={resetPasswordDialogOpen}
