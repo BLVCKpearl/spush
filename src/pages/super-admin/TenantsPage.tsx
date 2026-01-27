@@ -20,13 +20,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -35,34 +28,27 @@ import {
   Users,
   ShoppingCart,
   Search,
-  MoreHorizontal,
-  Eye,
-  UserCog,
   Ban,
   CheckCircle,
   Loader2,
+  ChevronRight,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useImpersonation } from '@/contexts/ImpersonationContext';
 import {
   useTenants,
-  useSuspendTenant,
   useCreateTenant,
   type ManagedTenant,
 } from '@/hooks/useTenantManagement';
 
 export default function TenantsPage() {
   const navigate = useNavigate();
-  const { startImpersonation } = useImpersonation();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newTenantName, setNewTenantName] = useState('');
   const [newTenantSlug, setNewTenantSlug] = useState('');
-  const [suspendDialogTenant, setSuspendDialogTenant] = useState<ManagedTenant | null>(null);
 
   const { data: tenants, isLoading } = useTenants();
-  const suspendMutation = useSuspendTenant();
   const createMutation = useCreateTenant();
 
   const filteredTenants = tenants?.filter(
@@ -92,27 +78,6 @@ export default function TenantsPage() {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
     setNewTenantSlug(slug);
-  };
-
-  const handleImpersonate = async (tenant: ManagedTenant) => {
-    await startImpersonation({
-      id: tenant.id,
-      name: tenant.name,
-      venue_slug: tenant.venue_slug,
-    });
-    navigate('/admin/orders');
-  };
-
-  const handleSuspendConfirm = () => {
-    if (!suspendDialogTenant) return;
-    suspendMutation.mutate(
-      { 
-        tenantId: suspendDialogTenant.id, 
-        suspend: !suspendDialogTenant.is_suspended,
-        tenantName: suspendDialogTenant.name 
-      },
-      { onSuccess: () => setSuspendDialogTenant(null) }
-    );
   };
 
   const getStatusBadge = (tenant: ManagedTenant) => {
@@ -218,7 +183,7 @@ export default function TenantsPage() {
         />
       </div>
 
-      {/* Tenants Table */}
+      {/* Tenants Table - Read Only, clickable rows */}
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -263,49 +228,8 @@ export default function TenantsPage() {
                     <TableCell className="text-muted-foreground text-sm">
                       {formatDistanceToNow(new Date(tenant.created_at), { addSuffix: true })}
                     </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleImpersonate(tenant)}>
-                            <UserCog className="h-4 w-4 mr-2" />
-                            Impersonate Admin
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() =>
-                              window.open(`/v/${tenant.venue_slug}`, '_blank')
-                            }
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Public Menu
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => setSuspendDialogTenant(tenant)}
-                            className={
-                              tenant.is_suspended
-                                ? 'text-primary'
-                                : 'text-destructive focus:text-destructive'
-                            }
-                          >
-                            {tenant.is_suspended ? (
-                              <>
-                                <CheckCircle className="h-4 w-4 mr-2" />
-                                Reactivate Tenant
-                              </>
-                            ) : (
-                              <>
-                                <Ban className="h-4 w-4 mr-2" />
-                                Suspend Tenant
-                              </>
-                            )}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                    <TableCell>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ))
@@ -353,41 +277,6 @@ export default function TenantsPage() {
             </Button>
             <Button onClick={handleCreateTenant} disabled={createMutation.isPending}>
               {createMutation.isPending ? 'Creating...' : 'Create Tenant'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Suspend/Reactivate Confirmation Dialog */}
-      <Dialog
-        open={!!suspendDialogTenant}
-        onOpenChange={(open) => !open && setSuspendDialogTenant(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {suspendDialogTenant?.is_suspended ? 'Reactivate' : 'Suspend'} Tenant
-            </DialogTitle>
-            <DialogDescription>
-              {suspendDialogTenant?.is_suspended
-                ? `Are you sure you want to reactivate "${suspendDialogTenant?.name}"? Their staff will be able to access the admin panel again.`
-                : `Are you sure you want to suspend "${suspendDialogTenant?.name}"? Their staff will be unable to access the admin panel until reactivated.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSuspendDialogTenant(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant={suspendDialogTenant?.is_suspended ? 'default' : 'destructive'}
-              onClick={handleSuspendConfirm}
-              disabled={suspendMutation.isPending}
-            >
-              {suspendMutation.isPending
-                ? 'Processing...'
-                : suspendDialogTenant?.is_suspended
-                  ? 'Reactivate'
-                  : 'Suspend'}
             </Button>
           </DialogFooter>
         </DialogContent>

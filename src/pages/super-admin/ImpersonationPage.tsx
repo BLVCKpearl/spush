@@ -44,11 +44,15 @@ export default function ImpersonationPage() {
   const handleStartImpersonation = async () => {
     if (!confirmTenant) return;
 
-    await startImpersonation({
-      id: confirmTenant.id,
-      name: confirmTenant.name,
-      venue_slug: confirmTenant.venue_slug,
-    });
+    // Store current URL as return path
+    await startImpersonation(
+      {
+        id: confirmTenant.id,
+        name: confirmTenant.name,
+        venue_slug: confirmTenant.venue_slug,
+      },
+      '/super-admin/impersonation'
+    );
 
     setConfirmTenant(null);
     navigate("/admin/orders");

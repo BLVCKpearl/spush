@@ -1,9 +1,11 @@
+import { useNavigate } from 'react-router-dom';
 import { useImpersonation } from '@/contexts/ImpersonationContext';
 import { Button } from '@/components/ui/button';
 import { XCircle, UserCog, Pencil } from 'lucide-react';
 
 export default function ImpersonationBanner() {
-  const { isImpersonating, impersonatedTenant, stopImpersonation } = useImpersonation();
+  const navigate = useNavigate();
+  const { isImpersonating, impersonatedTenant, stopImpersonation, returnUrl } = useImpersonation();
 
   if (!isImpersonating || !impersonatedTenant) {
     return null;
@@ -11,6 +13,9 @@ export default function ImpersonationBanner() {
 
   const handleStopImpersonation = async () => {
     await stopImpersonation();
+    // Navigate back to return URL or default to impersonation page
+    const targetUrl = returnUrl || '/super-admin/impersonation';
+    navigate(targetUrl, { replace: true });
   };
 
   return (
