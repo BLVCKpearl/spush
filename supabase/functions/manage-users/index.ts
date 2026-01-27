@@ -49,6 +49,13 @@ interface ServiceRolePasswordRequest {
   password: string;
 }
 
+interface BootstrapSuperAdminRequest {
+  action: "bootstrap_super_admin";
+  email: string;
+  password: string;
+  fullName: string;
+}
+
 type UserManagementRequest =
   | CreateUserRequest
   | UpdateUserRequest
@@ -56,7 +63,8 @@ type UserManagementRequest =
   | DeactivateUserRequest
   | SetPasswordRequest
   | ServiceRolePasswordRequest
-  | DeleteUserRequest;
+  | DeleteUserRequest
+  | BootstrapSuperAdminRequest;
 
 // Generate a secure random password
 function generateSecurePassword(): string {
@@ -82,6 +90,77 @@ Deno.serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     const body: UserManagementRequest = await req.json();
+
+    // Bootstrap super admin - only works when NO super admins exist
+    if (body.action === "bootstrap_super_admin") {
+      const { email, password, fullName } = body as BootstrapSuperAdminRequest;
+
+      if (!email || !password || !fullName) {
+        return new Response(
+          JSON.stringify({ error: "Email, password, and fullName are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Check if any super admins already exist
+      const { count: superAdminCount } = await supabaseAdmin
+        .from("super_admins")
+        .select("*", { count: "exact", head: true });
+
+      if ((superAdminCount || 0) > 0) {
+        return new Response(
+          JSON.stringify({ error: "Bootstrap not allowed - super admin(s) already exist" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Delete all existing auth users first (cleanup)
+      const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+      for (const user of existingUsers?.users || []) {
+        await supabaseAdmin.auth.admin.deleteUser(user.id);
+      }
+
+      // Create the super admin user
+      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName },
+      });
+
+      if (createError || !newUser.user) {
+        console.error("Error creating super admin:", createError);
+        return new Response(
+          JSON.stringify({ error: createError?.message || "Failed to create super admin" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Create profile manually (trigger won't work with service role)
+      await supabaseAdmin.from("profiles").insert({
+        user_id: newUser.user.id,
+        email,
+        display_name: fullName,
+        is_active: true,
+        onboarding_completed: true,
+      });
+
+      // Add to super_admins table
+      await supabaseAdmin.from("super_admins").insert({
+        user_id: newUser.user.id,
+        email,
+        display_name: fullName,
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          userId: newUser.user.id,
+          message: "Super admin created successfully",
+        }),
+        { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Service role password update - bypasses user auth (for system use only)
     if (body.action === "service_set_password") {
