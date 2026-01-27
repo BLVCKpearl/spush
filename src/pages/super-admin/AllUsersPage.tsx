@@ -30,11 +30,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Shield, ShieldCheck, User, MoreHorizontal, KeyRound, Ban, CheckCircle, Loader2, Pencil, Archive } from "lucide-react";
+import { Search, Shield, ShieldCheck, User, MoreHorizontal, KeyRound, Key, Ban, CheckCircle, Loader2, Pencil, Archive } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import UserProfileDialog from "@/components/super-admin/UserProfileDialog";
 import EditUserDialog from "@/components/super-admin/EditUserDialog";
+import SetPasswordDialog from "@/components/super-admin/SetPasswordDialog";
 
 interface UserWithRoles {
   id: string;
@@ -67,6 +68,7 @@ export default function AllUsersPage() {
   const [editDialogUser, setEditDialogUser] = useState<UserWithRoles | null>(null);
   const [archiveDialogUser, setArchiveDialogUser] = useState<UserWithRoles | null>(null);
   const [profileDialogUser, setProfileDialogUser] = useState<UserWithRoles | null>(null);
+  const [setPasswordDialogUser, setSetPasswordDialogUser] = useState<UserWithRoles | null>(null);
   const [editValidationError, setEditValidationError] = useState<string | null>(null);
 
   // Fetch all venues for filter dropdown
@@ -641,9 +643,13 @@ export default function AllUsersPage() {
                             <Pencil className="h-4 w-4 mr-2" />
                             Edit
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setSetPasswordDialogUser(user)}>
+                            <Key className="h-4 w-4 mr-2" />
+                            Set Password
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => setResetDialogUser(user)}>
                             <KeyRound className="h-4 w-4 mr-2" />
-                            Reset Password
+                            Reset to Temp Password
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {!isSelf(user) && (
@@ -794,6 +800,13 @@ export default function AllUsersPage() {
         user={profileDialogUser}
         open={!!profileDialogUser}
         onOpenChange={(open) => !open && setProfileDialogUser(null)}
+      />
+
+      {/* Set Password Dialog */}
+      <SetPasswordDialog
+        user={setPasswordDialogUser}
+        open={!!setPasswordDialogUser}
+        onOpenChange={(open) => !open && setSetPasswordDialogUser(null)}
       />
     </div>
   );
