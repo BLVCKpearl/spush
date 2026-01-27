@@ -75,6 +75,22 @@ interface CreateSuperAdminRequest {
   displayName: string;
 }
 
+interface ResetSuperAdminPasswordRequest {
+  action: "reset_super_admin_password";
+  userId: string;
+  password: string;
+}
+
+interface SuspendSuperAdminRequest {
+  action: "suspend_super_admin";
+  userId: string;
+}
+
+interface ReactivateSuperAdminRequest {
+  action: "reactivate_super_admin";
+  userId: string;
+}
+
 type UserManagementRequest =
   | CreateUserRequest
   | UpdateUserRequest
@@ -85,7 +101,10 @@ type UserManagementRequest =
   | DeleteUserRequest
   | ArchiveUserRequest
   | BootstrapSuperAdminRequest
-  | CreateSuperAdminRequest;
+  | CreateSuperAdminRequest
+  | ResetSuperAdminPasswordRequest
+  | SuspendSuperAdminRequest
+  | ReactivateSuperAdminRequest;
 
 // Generate a secure random password
 function generateSecurePassword(): string {
@@ -309,6 +328,317 @@ Deno.serve(async (req) => {
           message: "Super admin created successfully",
         }),
         { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Reset super admin password - requires existing super admin auth
+    if (body.action === "reset_super_admin_password") {
+      const { userId, password } = body as ResetSuperAdminPasswordRequest;
+
+      if (!userId || !password) {
+        return new Response(
+          JSON.stringify({ error: "User ID and password are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (password.length < 6) {
+        return new Response(
+          JSON.stringify({ error: "Password must be at least 6 characters" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // This action requires authentication
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        return new Response(
+          JSON.stringify({ error: "Authorization required" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const token = authHeader.replace("Bearer ", "");
+      const { data: claimsData, error: claimsError } = await supabaseAdmin.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) {
+        return new Response(
+          JSON.stringify({ error: "Invalid token" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      const actorUserId = claimsData.claims.sub as string;
+
+      // Verify actor is a super admin
+      const { data: superAdminCheck } = await supabaseAdmin
+        .from("super_admins")
+        .select("id")
+        .eq("user_id", actorUserId)
+        .maybeSingle();
+      
+      if (!superAdminCheck) {
+        return new Response(
+          JSON.stringify({ error: "Only super admins can reset other super admin passwords" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Verify target is a super admin
+      const { data: targetSuperAdmin } = await supabaseAdmin
+        .from("super_admins")
+        .select("id, email")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (!targetSuperAdmin) {
+        return new Response(
+          JSON.stringify({ error: "Target user is not a super admin" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Update password
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        password,
+      });
+
+      if (updateError) {
+        console.error("Error resetting super admin password:", updateError);
+        return new Response(
+          JSON.stringify({ error: "Failed to reset password" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Audit log
+      await supabaseAdmin.from("admin_audit_logs").insert({
+        actor_user_id: actorUserId,
+        action: "password_reset_by_super_admin",
+        target_user_id: userId,
+        metadata: { target_email: targetSuperAdmin.email, target_is_super_admin: true },
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, message: "Password reset successfully" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Suspend super admin - requires existing super admin auth
+    if (body.action === "suspend_super_admin") {
+      const { userId } = body as SuspendSuperAdminRequest;
+
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ error: "User ID is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // This action requires authentication
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        return new Response(
+          JSON.stringify({ error: "Authorization required" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const token = authHeader.replace("Bearer ", "");
+      const { data: claimsData, error: claimsError } = await supabaseAdmin.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) {
+        return new Response(
+          JSON.stringify({ error: "Invalid token" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      const actorUserId = claimsData.claims.sub as string;
+
+      // Verify actor is a super admin
+      const { data: superAdminCheck } = await supabaseAdmin
+        .from("super_admins")
+        .select("id")
+        .eq("user_id", actorUserId)
+        .maybeSingle();
+      
+      if (!superAdminCheck) {
+        return new Response(
+          JSON.stringify({ error: "Only super admins can suspend other super admins" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Prevent self-suspension
+      if (userId === actorUserId) {
+        return new Response(
+          JSON.stringify({ error: "Cannot suspend yourself" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Check if at least 1 active super admin will remain after suspension
+      const { data: activeSuperAdmins } = await supabaseAdmin
+        .from("super_admins")
+        .select("id, user_id")
+        .eq("is_suspended", false);
+
+      const activeCount = activeSuperAdmins?.length || 0;
+      if (activeCount <= 1) {
+        return new Response(
+          JSON.stringify({ error: "Cannot suspend: at least 1 active super admin must exist" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Verify target is a super admin
+      const { data: targetSuperAdmin } = await supabaseAdmin
+        .from("super_admins")
+        .select("id, email, is_suspended")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (!targetSuperAdmin) {
+        return new Response(
+          JSON.stringify({ error: "Target user is not a super admin" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (targetSuperAdmin.is_suspended) {
+        return new Response(
+          JSON.stringify({ error: "Super admin is already suspended" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Suspend the super admin
+      const { error: updateError } = await supabaseAdmin
+        .from("super_admins")
+        .update({
+          is_suspended: true,
+          suspended_at: new Date().toISOString(),
+          suspended_by: actorUserId,
+        })
+        .eq("id", targetSuperAdmin.id);
+
+      if (updateError) {
+        console.error("Error suspending super admin:", updateError);
+        return new Response(
+          JSON.stringify({ error: "Failed to suspend super admin" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Audit log
+      await supabaseAdmin.from("admin_audit_logs").insert({
+        actor_user_id: actorUserId,
+        action: "super_admin_suspended",
+        target_user_id: userId,
+        metadata: { target_email: targetSuperAdmin.email },
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, message: "Super admin suspended successfully" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Reactivate super admin - requires existing super admin auth
+    if (body.action === "reactivate_super_admin") {
+      const { userId } = body as ReactivateSuperAdminRequest;
+
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ error: "User ID is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // This action requires authentication
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        return new Response(
+          JSON.stringify({ error: "Authorization required" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const token = authHeader.replace("Bearer ", "");
+      const { data: claimsData, error: claimsError } = await supabaseAdmin.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) {
+        return new Response(
+          JSON.stringify({ error: "Invalid token" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      const actorUserId = claimsData.claims.sub as string;
+
+      // Verify actor is a super admin
+      const { data: superAdminCheck } = await supabaseAdmin
+        .from("super_admins")
+        .select("id")
+        .eq("user_id", actorUserId)
+        .maybeSingle();
+      
+      if (!superAdminCheck) {
+        return new Response(
+          JSON.stringify({ error: "Only super admins can reactivate other super admins" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Verify target is a suspended super admin
+      const { data: targetSuperAdmin } = await supabaseAdmin
+        .from("super_admins")
+        .select("id, email, is_suspended")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (!targetSuperAdmin) {
+        return new Response(
+          JSON.stringify({ error: "Target user is not a super admin" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!targetSuperAdmin.is_suspended) {
+        return new Response(
+          JSON.stringify({ error: "Super admin is not suspended" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Reactivate the super admin
+      const { error: updateError } = await supabaseAdmin
+        .from("super_admins")
+        .update({
+          is_suspended: false,
+          suspended_at: null,
+          suspended_by: null,
+        })
+        .eq("id", targetSuperAdmin.id);
+
+      if (updateError) {
+        console.error("Error reactivating super admin:", updateError);
+        return new Response(
+          JSON.stringify({ error: "Failed to reactivate super admin" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Audit log
+      await supabaseAdmin.from("admin_audit_logs").insert({
+        actor_user_id: actorUserId,
+        action: "super_admin_reactivated",
+        target_user_id: userId,
+        metadata: { target_email: targetSuperAdmin.email },
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, message: "Super admin reactivated successfully" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

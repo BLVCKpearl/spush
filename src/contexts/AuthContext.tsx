@@ -108,7 +108,7 @@ async function fetchUserRoleWithTimeout(
     // First check if user is a super admin
     const { data: superAdmin, error: superAdminError } = await supabase
       .from("super_admins")
-      .select("id")
+      .select("id, is_suspended")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -119,6 +119,10 @@ async function fetchUserRoleWithTimeout(
     }
 
     if (superAdmin) {
+      // Check if super admin is suspended
+      if (superAdmin.is_suspended) {
+        throw new Error("SUPER_ADMIN_SUSPENDED");
+      }
       // Super admin - has access to all tenants
       return { role: "super_admin", tenantIds: [] };
     }
@@ -301,6 +305,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (signal.aborted) return;
 
         console.error("Profile fetch error:", profileError);
+        
+        // Check if super admin is suspended
+        const isSuspended = profileError instanceof Error && profileError.message === 'SUPER_ADMIN_SUSPENDED';
+        if (isSuspended) {
+          currentDiagnostics.profileFetch = 'failed';
+          currentDiagnostics.errorType = 'SUPER_ADMIN_SUSPENDED';
+          setDiagnostics(currentDiagnostics);
+          setRole(null);
+          setAuthState("error_profile");
+          setError("Your account has been suspended. Please contact another administrator.");
+          
+          // Sign out the suspended user
+          try {
+            await supabase.auth.signOut({ scope: "global" });
+          } catch {
+            // Ignore sign out errors
+          }
+          return;
+        }
         
         const isTimeout = profileError instanceof Error && profileError.message.includes('timeout');
         currentDiagnostics.profileFetch = 'failed';
