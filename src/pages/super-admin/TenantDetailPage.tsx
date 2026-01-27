@@ -51,7 +51,7 @@ import {
   UserCog,
   Ban,
   CheckCircle,
-  KeyRound,
+  Key,
   LogOut,
   Loader2,
   Search,
@@ -62,6 +62,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { formatNaira } from "@/lib/currency";
+import SetPasswordDialog from "@/components/super-admin/SetPasswordDialog";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
@@ -77,10 +78,10 @@ export default function TenantDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [forceLogoutDialogOpen, setForceLogoutDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
-  const [resetPasswordUser, setResetPasswordUser] = useState<{
-    id: string;
-    email: string;
-    displayName: string;
+  const [setPasswordUser, setSetPasswordUser] = useState<{
+    user_id: string;
+    email: string | null;
+    display_name: string | null;
   } | null>(null);
   const [roleChangeUser, setRoleChangeUser] = useState<{
     id: string;
@@ -239,43 +240,6 @@ export default function TenantDetailPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // Reset password mutation
-  const resetPasswordMutation = useMutation({
-    mutationFn: async (targetUserId: string) => {
-      const tempPassword = `Reset${Date.now().toString(36).toUpperCase()}!`;
-
-      const { error } = await supabase.functions.invoke("manage-users", {
-        body: {
-          action: "service_set_password",
-          targetUserId,
-          newPassword: tempPassword,
-        },
-      });
-
-      if (error) throw error;
-
-      // Set must_change_password flag
-      await supabase
-        .from("profiles")
-        .update({ must_change_password: true })
-        .eq("user_id", targetUserId);
-
-      if (user) {
-        await logAuditEvent(user.id, {
-          action: "password_reset",
-          targetUserId,
-          tenantId: tenantId,
-        });
-      }
-
-      return tempPassword;
-    },
-    onSuccess: (tempPassword) => {
-      toast.success(`Password reset. Temporary: ${tempPassword}`);
-      setResetPasswordUser(null);
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
 
   // Change role mutation
   const changeRoleMutation = useMutation({
@@ -609,10 +573,10 @@ export default function TenantDetailPage() {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() =>
-                              setResetPasswordUser({ id: u.id, email: u.email, displayName: u.displayName })
+                              setSetPasswordUser({ user_id: u.id, email: u.email, display_name: u.displayName })
                             }
                           >
-                            <KeyRound className="h-4 w-4 mr-2" /> Set Password
+                            <Key className="h-4 w-4 mr-2" /> Set Password
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -766,29 +730,12 @@ export default function TenantDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Reset Password Dialog */}
-      <Dialog open={!!resetPasswordUser} onOpenChange={() => setResetPasswordUser(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reset Password</DialogTitle>
-            <DialogDescription>
-              Reset password for {resetPasswordUser?.displayName || resetPasswordUser?.email}?
-              They will need to change it on next login.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setResetPasswordUser(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => resetPasswordUser && resetPasswordMutation.mutate(resetPasswordUser.id)}
-              disabled={resetPasswordMutation.isPending}
-            >
-              {resetPasswordMutation.isPending ? "Resetting..." : "Reset Password"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Set Password Dialog */}
+      <SetPasswordDialog
+        user={setPasswordUser}
+        open={!!setPasswordUser}
+        onOpenChange={(open) => !open && setSetPasswordUser(null)}
+      />
 
       {/* Change Role Dialog */}
       <Dialog open={!!roleChangeUser} onOpenChange={() => setRoleChangeUser(null)}>
