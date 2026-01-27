@@ -23,8 +23,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Shield, ShieldCheck, User, MoreHorizontal, KeyRound, Ban, CheckCircle, Loader2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Search, Shield, ShieldCheck, User, MoreHorizontal, KeyRound, Ban, CheckCircle, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { formatDistanceToNow } from "date-fns";
 
 interface UserWithRoles {
   id: string;
@@ -35,16 +43,39 @@ interface UserWithRoles {
   created_at: string;
   venue_id: string | null;
   venue_name?: string;
-  roles: Array<{ role: string; tenant_role: string | null; tenant_id: string | null }>;
+  roles: Array<{ id: string; role: string; tenant_role: string | null; tenant_id: string | null }>;
   is_super_admin: boolean;
 }
+
+type RoleFilter = "all" | "super_admin" | "tenant_admin" | "staff";
+type StatusFilter = "all" | "active" | "inactive";
 
 export default function AllUsersPage() {
   const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
+  
   const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [tenantFilter, setTenantFilter] = useState<string>("all");
+  
   const [revokeDialogUser, setRevokeDialogUser] = useState<UserWithRoles | null>(null);
   const [resetDialogUser, setResetDialogUser] = useState<UserWithRoles | null>(null);
+  const [deleteDialogUser, setDeleteDialogUser] = useState<UserWithRoles | null>(null);
+  const [changeRoleDialogUser, setChangeRoleDialogUser] = useState<UserWithRoles | null>(null);
+
+  // Fetch all venues for filter dropdown
+  const { data: venues } = useQuery({
+    queryKey: ["all-venues"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("venues")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
   // Fetch all users with their roles
   const { data: users, isLoading } = useQuery({
@@ -68,11 +99,11 @@ export default function AllUsersPage() {
       // Get all user roles
       const { data: userRoles } = await supabase
         .from("user_roles")
-        .select("user_id, role, tenant_role, tenant_id");
+        .select("id, user_id, role, tenant_role, tenant_id");
 
       // Get venues for names
-      const { data: venues } = await supabase.from("venues").select("id, name");
-      const venueMap = new Map(venues?.map((v) => [v.id, v.name]) || []);
+      const { data: venuesData } = await supabase.from("venues").select("id, name");
+      const venueMap = new Map(venuesData?.map((v) => [v.id, v.name]) || []);
 
       // Combine data
       const usersWithRoles: UserWithRoles[] = (profiles || []).map((profile) => {
@@ -160,11 +191,103 @@ export default function AllUsersPage() {
     },
   });
 
-  const filteredUsers = users?.filter(
-    (user) =>
+  // Delete user mutation (soft delete)
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      // Soft delete: deactivate and remove all roles
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ is_active: false })
+        .eq("user_id", userId);
+
+      if (profileError) throw profileError;
+
+      // Remove user roles
+      const { error: rolesError } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", userId);
+
+      if (rolesError) throw rolesError;
+
+      // Log the action
+      await supabase.from("admin_audit_logs").insert({
+        action: "user_archived",
+        actor_user_id: currentUser?.id || "",
+        target_user_id: userId,
+        metadata: { timestamp: new Date().toISOString() },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["super-admin-all-users"] });
+      toast.success("User archived successfully");
+      setDeleteDialogUser(null);
+    },
+    onError: (error) => {
+      toast.error(`Failed to archive user: ${error.message}`);
+    },
+  });
+
+  // Change role mutation
+  const changeRoleMutation = useMutation({
+    mutationFn: async ({ userId, roleId, newRole }: { userId: string; roleId: string; newRole: "tenant_admin" | "staff" }) => {
+      const { error } = await supabase
+        .from("user_roles")
+        .update({ 
+          tenant_role: newRole,
+          role: newRole === "tenant_admin" ? "admin" : "staff"
+        })
+        .eq("id", roleId);
+
+      if (error) throw error;
+
+      // Log the action
+      await supabase.from("admin_audit_logs").insert({
+        action: "user_role_changed",
+        actor_user_id: currentUser?.id || "",
+        target_user_id: userId,
+        metadata: { 
+          new_role: newRole,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["super-admin-all-users"] });
+      toast.success("User role updated successfully");
+      setChangeRoleDialogUser(null);
+    },
+    onError: (error) => {
+      toast.error(`Failed to change role: ${error.message}`);
+    },
+  });
+
+  // Filter users
+  const filteredUsers = users?.filter((user) => {
+    // Search filter
+    const matchesSearch = 
       user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.display_name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      user.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.user_id.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (!matchesSearch) return false;
+
+    // Role filter
+    if (roleFilter !== "all") {
+      if (roleFilter === "super_admin" && !user.is_super_admin) return false;
+      if (roleFilter === "tenant_admin" && !user.roles.some((r) => r.tenant_role === "tenant_admin")) return false;
+      if (roleFilter === "staff" && !user.roles.some((r) => r.tenant_role === "staff" || r.role === "staff")) return false;
+    }
+
+    // Status filter
+    if (statusFilter === "active" && !user.is_active) return false;
+    if (statusFilter === "inactive" && user.is_active) return false;
+
+    // Tenant filter
+    if (tenantFilter !== "all" && user.venue_id !== tenantFilter) return false;
+
+    return true;
+  });
 
   const getRoleBadge = (user: UserWithRoles) => {
     if (user.is_super_admin) {
@@ -210,9 +333,22 @@ export default function AllUsersPage() {
     return <Badge variant="outline">No Role</Badge>;
   };
 
+  const getCurrentRole = (user: UserWithRoles): "tenant_admin" | "staff" | null => {
+    const tenantAdminRole = user.roles.find((r) => r.tenant_role === "tenant_admin");
+    if (tenantAdminRole) return "tenant_admin";
+    const staffRole = user.roles.find((r) => r.tenant_role === "staff");
+    if (staffRole) return "staff";
+    return null;
+  };
+
   const canManageUser = (user: UserWithRoles) => {
     // Cannot manage super admins or self
     return !user.is_super_admin && user.user_id !== currentUser?.id;
+  };
+
+  const canChangeRole = (user: UserWithRoles) => {
+    // Can only change role for non-super-admin users with a tenant role
+    return canManageUser(user) && user.roles.some(r => r.tenant_role);
   };
 
   return (
@@ -253,15 +389,54 @@ export default function AllUsersPage() {
         </Card>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search users..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name, email, or user ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        
+        <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as RoleFilter)}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Role" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Roles</SelectItem>
+            <SelectItem value="super_admin">Super Admin</SelectItem>
+            <SelectItem value="tenant_admin">Tenant Admin</SelectItem>
+            <SelectItem value="staff">Staff</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+          <SelectTrigger className="w-[130px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={tenantFilter} onValueChange={setTenantFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Tenant" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Tenants</SelectItem>
+            {venues?.map((venue) => (
+              <SelectItem key={venue.id} value={venue.id}>
+                {venue.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Users Table */}
@@ -270,7 +445,8 @@ export default function AllUsersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>User</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Tenant</TableHead>
                 <TableHead>Status</TableHead>
@@ -281,24 +457,24 @@ export default function AllUsersPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                   </TableCell>
                 </TableRow>
               ) : filteredUsers?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No users found
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredUsers?.map((user) => (
                   <TableRow key={user.id} className={!user.is_active ? "opacity-60" : ""}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{user.display_name || "—"}</div>
-                        <div className="text-sm text-muted-foreground">{user.email}</div>
-                      </div>
+                    <TableCell className="font-medium">
+                      {user.display_name || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {user.email}
                     </TableCell>
                     <TableCell>{getRoleBadge(user)}</TableCell>
                     <TableCell>
@@ -323,8 +499,8 @@ export default function AllUsersPage() {
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell>
-                      {new Date(user.created_at).toLocaleDateString()}
+                    <TableCell className="text-muted-foreground text-sm">
+                      {formatDistanceToNow(new Date(user.created_at), { addSuffix: true })}
                     </TableCell>
                     <TableCell>
                       {canManageUser(user) && (
@@ -339,6 +515,12 @@ export default function AllUsersPage() {
                               <KeyRound className="h-4 w-4 mr-2" />
                               Reset Password
                             </DropdownMenuItem>
+                            {canChangeRole(user) && (
+                              <DropdownMenuItem onClick={() => setChangeRoleDialogUser(user)}>
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Change Role
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={() => setRevokeDialogUser(user)}
@@ -355,6 +537,13 @@ export default function AllUsersPage() {
                                   Reactivate User
                                 </>
                               )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setDeleteDialogUser(user)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Archive User
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -421,6 +610,75 @@ export default function AllUsersPage() {
               disabled={resetPasswordMutation.isPending}
             >
               {resetPasswordMutation.isPending ? "Resetting..." : "Reset Password"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete/Archive User Confirmation Dialog */}
+      <Dialog open={!!deleteDialogUser} onOpenChange={(open) => !open && setDeleteDialogUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archive User</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to archive "{deleteDialogUser?.display_name || deleteDialogUser?.email}"? 
+              This will deactivate their account and remove their roles. This action cannot be easily undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogUser(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteDialogUser && deleteUserMutation.mutate(deleteDialogUser.user_id)}
+              disabled={deleteUserMutation.isPending}
+            >
+              {deleteUserMutation.isPending ? "Archiving..." : "Archive User"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Role Dialog */}
+      <Dialog open={!!changeRoleDialogUser} onOpenChange={(open) => !open && setChangeRoleDialogUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change User Role</DialogTitle>
+            <DialogDescription>
+              Change the role for "{changeRoleDialogUser?.display_name || changeRoleDialogUser?.email}".
+              This will update their permissions within their current tenant.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground mb-2">
+              Current role: <strong>{getCurrentRole(changeRoleDialogUser!) === "tenant_admin" ? "Tenant Admin" : "Staff"}</strong>
+            </p>
+            <p className="text-sm">
+              New role: <strong>{getCurrentRole(changeRoleDialogUser!) === "tenant_admin" ? "Staff" : "Tenant Admin"}</strong>
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setChangeRoleDialogUser(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!changeRoleDialogUser) return;
+                const currentRole = getCurrentRole(changeRoleDialogUser);
+                const newRole = currentRole === "tenant_admin" ? "staff" : "tenant_admin";
+                const roleRecord = changeRoleDialogUser.roles.find(r => r.tenant_role);
+                if (roleRecord) {
+                  changeRoleMutation.mutate({
+                    userId: changeRoleDialogUser.user_id,
+                    roleId: roleRecord.id,
+                    newRole,
+                  });
+                }
+              }}
+              disabled={changeRoleMutation.isPending}
+            >
+              {changeRoleMutation.isPending ? "Updating..." : "Change Role"}
             </Button>
           </DialogFooter>
         </DialogContent>
