@@ -322,6 +322,7 @@ export default function TenantDetailPage() {
               action: "delete",
               userId,
               tenantId,
+              skipTenantAdminCheck: true, // Allow deleting all users when deleting entire tenant
             },
           });
           
