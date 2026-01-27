@@ -275,8 +275,8 @@ export default function AllUsersPage() {
     // Role filter
     if (roleFilter !== "all") {
       if (roleFilter === "super_admin" && !user.is_super_admin) return false;
-      if (roleFilter === "tenant_admin" && !user.roles.some((r) => r.tenant_role === "tenant_admin")) return false;
-      if (roleFilter === "staff" && !user.roles.some((r) => r.tenant_role === "staff" || r.role === "staff")) return false;
+      if (roleFilter === "tenant_admin" && !user.roles?.some((r) => r.tenant_role === "tenant_admin")) return false;
+      if (roleFilter === "staff" && !user.roles?.some((r) => r.tenant_role === "staff" || r.role === "staff")) return false;
     }
 
     // Status filter
@@ -299,7 +299,7 @@ export default function AllUsersPage() {
       );
     }
 
-    const tenantAdminRole = user.roles.find((r) => r.tenant_role === "tenant_admin");
+    const tenantAdminRole = user.roles?.find((r) => r.tenant_role === "tenant_admin");
     if (tenantAdminRole) {
       return (
         <Badge variant="secondary">
@@ -309,10 +309,10 @@ export default function AllUsersPage() {
       );
     }
 
-    const staffRole = user.roles.find((r) => r.tenant_role === "staff" || r.role === "staff");
+    const staffRole = user.roles?.find((r) => r.tenant_role === "staff" || r.role === "staff");
     if (staffRole) {
       return (
-        <Badge variant="outline">
+        <Badge variant="secondary" className="border-border">
           <User className="h-3 w-3 mr-1" />
           Staff
         </Badge>
@@ -320,7 +320,7 @@ export default function AllUsersPage() {
     }
 
     // Legacy admin role
-    const legacyAdmin = user.roles.find((r) => r.role === "admin");
+    const legacyAdmin = user.roles?.find((r) => r.role === "admin");
     if (legacyAdmin) {
       return (
         <Badge variant="secondary">
@@ -375,7 +375,7 @@ export default function AllUsersPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold">
-              {users?.filter((u) => u.roles.some((r) => r.tenant_role === "tenant_admin")).length || 0}
+              {users?.filter((u) => u.roles?.some((r) => r.tenant_role === "tenant_admin")).length || 0}
             </div>
             <p className="text-sm text-muted-foreground">Tenant Admins</p>
           </CardContent>
@@ -668,7 +668,7 @@ export default function AllUsersPage() {
                 if (!changeRoleDialogUser) return;
                 const currentRole = getCurrentRole(changeRoleDialogUser);
                 const newRole = currentRole === "tenant_admin" ? "staff" : "tenant_admin";
-                const roleRecord = changeRoleDialogUser.roles.find(r => r.tenant_role);
+                const roleRecord = changeRoleDialogUser.roles?.find(r => r.tenant_role);
                 if (roleRecord) {
                   changeRoleMutation.mutate({
                     userId: changeRoleDialogUser.user_id,
