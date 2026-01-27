@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Shield, ShieldCheck, User, MoreHorizontal, KeyRound, Ban, CheckCircle, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { Search, Shield, ShieldCheck, User, MoreHorizontal, KeyRound, Ban, CheckCircle, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
@@ -61,7 +61,6 @@ export default function AllUsersPage() {
   
   const [revokeDialogUser, setRevokeDialogUser] = useState<UserWithRoles | null>(null);
   const [resetDialogUser, setResetDialogUser] = useState<UserWithRoles | null>(null);
-  const [deleteDialogUser, setDeleteDialogUser] = useState<UserWithRoles | null>(null);
   const [changeRoleDialogUser, setChangeRoleDialogUser] = useState<UserWithRoles | null>(null);
 
   // Fetch all venues for filter dropdown
@@ -188,43 +187,6 @@ export default function AllUsersPage() {
     },
     onError: (error) => {
       toast.error(`Failed to reset password: ${error.message}`);
-    },
-  });
-
-  // Delete user mutation (soft delete)
-  const deleteUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      // Soft delete: deactivate and remove all roles
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({ is_active: false })
-        .eq("user_id", userId);
-
-      if (profileError) throw profileError;
-
-      // Remove user roles
-      const { error: rolesError } = await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", userId);
-
-      if (rolesError) throw rolesError;
-
-      // Log the action
-      await supabase.from("admin_audit_logs").insert({
-        action: "user_archived",
-        actor_user_id: currentUser?.id || "",
-        target_user_id: userId,
-        metadata: { timestamp: new Date().toISOString() },
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["super-admin-all-users"] });
-      toast.success("User archived successfully");
-      setDeleteDialogUser(null);
-    },
-    onError: (error) => {
-      toast.error(`Failed to archive user: ${error.message}`);
     },
   });
 
@@ -539,13 +501,6 @@ export default function AllUsersPage() {
                                 </>
                               )}
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => setDeleteDialogUser(user)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Archive User
-                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
@@ -616,30 +571,6 @@ export default function AllUsersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete/Archive User Confirmation Dialog */}
-      <Dialog open={!!deleteDialogUser} onOpenChange={(open) => !open && setDeleteDialogUser(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Archive User</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to archive "{deleteDialogUser?.display_name || deleteDialogUser?.email}"? 
-              This will deactivate their account and remove their roles. This action cannot be easily undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogUser(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deleteDialogUser && deleteUserMutation.mutate(deleteDialogUser.user_id)}
-              disabled={deleteUserMutation.isPending}
-            >
-              {deleteUserMutation.isPending ? "Archiving..." : "Archive User"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Change Role Dialog */}
       <Dialog open={!!changeRoleDialogUser} onOpenChange={(open) => !open && setChangeRoleDialogUser(null)}>
