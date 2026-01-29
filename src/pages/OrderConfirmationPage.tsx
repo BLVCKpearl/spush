@@ -25,15 +25,15 @@ import { toast } from 'sonner';
 import type { OrderStatus } from '@/types/database';
 
 const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType; color: string }> = {
-  pending: { label: 'Order Received', icon: Clock, color: 'bg-yellow-500' },
-  pending_payment: { label: 'Awaiting Payment', icon: CreditCard, color: 'bg-amber-500' },
-  cash_on_delivery: { label: 'Pay on Delivery', icon: Banknote, color: 'bg-blue-500' },
-  confirmed: { label: 'Confirmed', icon: CheckCircle2, color: 'bg-blue-500' },
-  preparing: { label: 'Preparing', icon: ChefHat, color: 'bg-orange-500' },
-  ready: { label: 'Ready', icon: Bell, color: 'bg-green-500' },
-  completed: { label: 'Completed', icon: CheckCircle2, color: 'bg-gray-500' },
-  cancelled: { label: 'Cancelled', icon: AlertCircle, color: 'bg-red-500' },
-  expired: { label: 'Expired', icon: AlertTriangle, color: 'bg-red-500' },
+  pending: { label: 'Order Received', icon: Clock, color: 'bg-status-warning text-status-warning-foreground' },
+  pending_payment: { label: 'Awaiting Payment', icon: CreditCard, color: 'bg-status-warning text-status-warning-foreground' },
+  cash_on_delivery: { label: 'Pay on Delivery', icon: Banknote, color: 'bg-status-info text-status-info-foreground' },
+  confirmed: { label: 'Confirmed', icon: CheckCircle2, color: 'bg-status-info text-status-info-foreground' },
+  preparing: { label: 'Preparing', icon: ChefHat, color: 'bg-status-pending text-status-pending-foreground' },
+  ready: { label: 'Ready', icon: Bell, color: 'bg-status-success text-status-success-foreground' },
+  completed: { label: 'Completed', icon: CheckCircle2, color: 'bg-muted text-muted-foreground' },
+  cancelled: { label: 'Cancelled', icon: AlertCircle, color: 'bg-status-error text-status-error-foreground' },
+  expired: { label: 'Expired', icon: AlertTriangle, color: 'bg-status-error text-status-error-foreground' },
 };
 
 export default function OrderConfirmationPage() {
@@ -144,7 +144,7 @@ export default function OrderConfirmationPage() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-full ${status.color} text-white`}>
+              <div className={`p-2 rounded-full ${status.color}`}>
                 <StatusIcon className="h-5 w-5" />
               </div>
               <div>
@@ -163,15 +163,15 @@ export default function OrderConfirmationPage() {
 
         {/* Cash Payment Instructions */}
         {isCashPayment && !order.payment_confirmed && (
-          <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
+          <Card className="bg-status-info-bg border-status-info/20">
             <CardContent className="p-4">
               <div className="flex gap-3">
-                <Banknote className="h-6 w-6 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <Banknote className="h-6 w-6 text-status-info flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-blue-900 dark:text-blue-100">
+                  <p className="font-semibold text-foreground">
                     Pay with Cash
                   </p>
-                  <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                  <p className="text-sm text-muted-foreground mt-1">
                     A staff member will deliver your order and collect payment of{' '}
                     <span className="font-bold">{formatNaira(order.total_kobo)}</span> at your table.
                   </p>
@@ -183,7 +183,7 @@ export default function OrderConfirmationPage() {
 
         {/* Bank Transfer Details */}
         {isBankTransfer && isPendingPayment && bankDetails && (
-          <Card className="bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800">
+          <Card className="bg-status-warning-bg border-status-warning/20">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <CreditCard className="h-5 w-5" />
@@ -227,11 +227,11 @@ export default function OrderConfirmationPage() {
               </div>
               
               {/* Reference with big copy button */}
-              <div className="bg-amber-100 dark:bg-amber-900 rounded-lg p-4 space-y-3">
-                <p className="text-sm text-amber-800 dark:text-amber-200 text-center font-medium">
+              <div className="bg-status-warning/10 rounded-lg p-4 space-y-3">
+                <p className="text-sm text-foreground text-center font-medium">
                   Use this reference as your transfer narration:
                 </p>
-                <p className="text-2xl font-bold text-center text-amber-900 dark:text-amber-100 tracking-wider">
+                <p className="text-2xl font-bold text-center text-foreground tracking-wider">
                   {order.order_reference}
                 </p>
                 <Button 
@@ -281,17 +281,17 @@ export default function OrderConfirmationPage() {
 
         {/* Transfer Initiated Status */}
         {isBankTransfer && isPendingPayment && hasClaim && (
-          <Card className="bg-emerald-50 border-emerald-200 dark:bg-emerald-950 dark:border-emerald-800">
+          <Card className="bg-status-success-bg border-status-success/20">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-900">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                <div className="p-2 rounded-full bg-status-success/10">
+                  <CheckCircle2 className="h-5 w-5 text-status-success" />
                 </div>
                 <div>
-                  <p className="font-semibold text-emerald-900 dark:text-emerald-100">
+                  <p className="font-semibold text-foreground">
                     Transfer Initiated
                   </p>
-                  <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                  <p className="text-sm text-muted-foreground">
                     We've received your notification. Your order is being prepared while we confirm payment.
                   </p>
                 </div>
