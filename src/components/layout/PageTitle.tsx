@@ -21,9 +21,9 @@ export default function PageTitle({
   return (
     <div className={cn('mb-6', className)}>
       <div className="flex items-start gap-3">
-        {/* Left accent bar */}
+        {/* Left accent bar - Gold */}
         {accent === 'left-bar' && (
-          <div className="w-1 h-8 bg-primary rounded-full flex-shrink-0 mt-0.5" />
+          <div className="w-1 h-8 bg-primary-600 rounded-full flex-shrink-0 mt-0.5" />
         )}
         
         <div className="flex-1">
@@ -34,9 +34,9 @@ export default function PageTitle({
             )}
           >
             {title}
-            {/* Underline accent */}
+            {/* Underline accent - Gold */}
             {accent === 'underline' && (
-              <span className="absolute bottom-0 left-0 w-12 h-0.5 bg-primary rounded-full" />
+              <span className="absolute bottom-0 left-0 w-12 h-0.5 bg-primary-600 rounded-full" />
             )}
           </h1>
           

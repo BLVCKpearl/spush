@@ -27,16 +27,16 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      // Base styles - pill shape, no borders
-      "inline-flex items-center justify-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all duration-200",
-      // Unselected state - white bg, olive text
-      "bg-background text-primary",
-      // Hover state for unselected - light olive gradient
-      "hover:bg-gradient-to-r hover:from-accent hover:to-transparent",
-      // Selected state - olive gradient, white text, subtle shadow
-      "data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-[hsl(163,33%,35%)] data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm",
+      // Base styles - pill shape
+      "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 relative",
+      // Unselected state - transparent bg, muted text
+      "bg-transparent text-muted-foreground",
+      // Hover state for unselected
+      "hover:text-foreground hover:bg-primary-100/50",
+      // Selected state - gold accent, dark text, bottom border
+      "data-[state=active]:bg-primary-100 data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary-600",
       // Focus styles
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-2",
       // Disabled state
       "disabled:pointer-events-none disabled:opacity-50",
       className,
