@@ -72,22 +72,22 @@ export default function AuthErrorScreen({
                 <div className="mt-2 p-3 bg-muted rounded-md text-xs font-mono space-y-1">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">sessionFound:</span>
-                    <span className={diagnostics.sessionFound ? 'text-green-600' : 'text-destructive'}>
+                    <span className={diagnostics.sessionFound ? 'text-status-success' : 'text-destructive'}>
                       {diagnostics.sessionFound ? 'true' : 'false'}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">profileFetch:</span>
                     <span className={
-                      diagnostics.profileFetch === 'ok' ? 'text-green-600' : 
-                      diagnostics.profileFetch === 'failed' ? 'text-destructive' : 'text-yellow-600'
+                      diagnostics.profileFetch === 'ok' ? 'text-status-success' : 
+                      diagnostics.profileFetch === 'failed' ? 'text-destructive' : 'text-status-warning'
                     }>
                       {diagnostics.profileFetch}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">timeoutHit:</span>
-                    <span className={diagnostics.timeoutHit ? 'text-destructive' : 'text-green-600'}>
+                    <span className={diagnostics.timeoutHit ? 'text-destructive' : 'text-status-success'}>
                       {diagnostics.timeoutHit ? 'yes' : 'no'}
                     </span>
                   </div>

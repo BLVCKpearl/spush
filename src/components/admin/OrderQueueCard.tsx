@@ -30,14 +30,14 @@ interface OrderQueueCardProps {
 
 const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType; color: string }> = {
   pending: { label: 'Pending', icon: Clock, color: 'bg-muted text-muted-foreground' },
-  pending_payment: { label: 'Awaiting Payment', icon: CreditCard, color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' },
-  cash_on_delivery: { label: 'Cash on Delivery', icon: Banknote, color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
-  confirmed: { label: 'Paid', icon: CheckCircle2, color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' },
-  preparing: { label: 'Preparing', icon: ChefHat, color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' },
-  ready: { label: 'Ready', icon: Bell, color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' },
+  pending_payment: { label: 'Awaiting Payment', icon: CreditCard, color: 'bg-status-warning-bg text-status-warning-foreground' },
+  cash_on_delivery: { label: 'Cash on Delivery', icon: Banknote, color: 'bg-status-info-bg text-status-info-foreground' },
+  confirmed: { label: 'Paid', icon: CheckCircle2, color: 'bg-status-success-bg text-status-success' },
+  preparing: { label: 'Preparing', icon: ChefHat, color: 'bg-status-pending-bg text-status-pending-foreground' },
+  ready: { label: 'Ready', icon: Bell, color: 'bg-primary-100 text-primary-700' },
   completed: { label: 'Served', icon: Utensils, color: 'bg-muted text-muted-foreground' },
-  cancelled: { label: 'Cancelled', icon: XCircle, color: 'bg-destructive/10 text-destructive' },
-  expired: { label: 'Expired', icon: XCircle, color: 'bg-destructive/10 text-destructive' },
+  cancelled: { label: 'Cancelled', icon: XCircle, color: 'bg-status-error-bg text-destructive' },
+  expired: { label: 'Expired', icon: XCircle, color: 'bg-status-error-bg text-destructive' },
 };
 
 export default function OrderQueueCard({
@@ -161,7 +161,7 @@ export default function OrderQueueCard({
             </div>
             <div className="flex items-center gap-1.5">
               {hasClaim && (order.status === 'pending_payment') && (
-                <Badge className="gap-1 text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">
+                <Badge className="gap-1 text-xs bg-status-success-bg text-status-success border-0">
                   <CheckCircle2 className="h-3 w-3" />
                   Transfer Initiated
                 </Badge>
@@ -178,7 +178,7 @@ export default function OrderQueueCard({
                     Transfer
                   </>
                 )}
-                {order.payment_confirmed && <CheckCircle2 className="h-3 w-3 text-green-600" />}
+                {order.payment_confirmed && <CheckCircle2 className="h-3 w-3 text-status-success" />}
               </Badge>
             </div>
           </div>

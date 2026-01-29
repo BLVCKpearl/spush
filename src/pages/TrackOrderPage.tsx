@@ -39,47 +39,47 @@ const statusConfig: Record<OrderStatus, {
     label: 'Order Received', 
     description: 'Your order has been received and is being reviewed.',
     icon: Clock, 
-    color: 'text-yellow-600',
-    bgColor: 'bg-yellow-100'
+    color: 'text-status-warning',
+    bgColor: 'bg-status-warning-bg'
   },
   pending_payment: { 
     label: 'Awaiting Payment', 
     description: 'Please complete your bank transfer to proceed with your order.',
     icon: CreditCard, 
-    color: 'text-amber-600',
-    bgColor: 'bg-amber-100'
+    color: 'text-status-warning',
+    bgColor: 'bg-status-warning-bg'
   },
   cash_on_delivery: { 
     label: 'Pay When Ready', 
     description: 'Your order is being prepared. Please pay when your food arrives.',
     notification: '👨‍🍳 Your order is in the kitchen!',
     icon: Banknote, 
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-100'
+    color: 'text-status-info',
+    bgColor: 'bg-status-info-bg'
   },
   confirmed: { 
     label: 'Payment Confirmed', 
     description: 'Thank you! Your payment has been confirmed.',
     notification: '✅ Payment received! Your order will start soon.',
     icon: CheckCircle2, 
-    color: 'text-emerald-600',
-    bgColor: 'bg-emerald-100'
+    color: 'text-status-success',
+    bgColor: 'bg-status-success-bg'
   },
   preparing: { 
     label: 'Preparing Your Order', 
     description: 'Our kitchen is now preparing your delicious meal.',
     notification: '🍳 Your order is being whipped up by our chefs!',
     icon: ChefHat, 
-    color: 'text-orange-600',
-    bgColor: 'bg-orange-100'
+    color: 'text-status-pending',
+    bgColor: 'bg-status-pending-bg'
   },
   ready: { 
     label: 'Ready for Pickup', 
     description: 'Your order is ready! It will be served to your table shortly.',
     notification: '🔔 Your food is ready and on its way!',
     icon: Bell, 
-    color: 'text-green-600',
-    bgColor: 'bg-green-100'
+    color: 'text-status-success',
+    bgColor: 'bg-status-success-bg'
   },
   completed: { 
     label: 'Order Complete', 
@@ -94,14 +94,14 @@ const statusConfig: Record<OrderStatus, {
     description: 'This order has been cancelled.',
     icon: XCircle, 
     color: 'text-destructive',
-    bgColor: 'bg-destructive/10'
+    bgColor: 'bg-status-error-bg'
   },
   expired: { 
     label: 'Order Expired', 
     description: 'This order has expired due to payment timeout. Please place a new order.',
     icon: AlertTriangle, 
     color: 'text-destructive',
-    bgColor: 'bg-destructive/10'
+    bgColor: 'bg-status-error-bg'
   },
 };
 
@@ -286,18 +286,18 @@ export default function TrackOrderPage() {
 
             {/* Transfer Initiated Status for Bank Transfer */}
             {isBankTransfer && !order.payment_confirmed && !isExpired && hasClaim && (
-              <Card className="bg-emerald-50 border-emerald-200 dark:bg-emerald-950 dark:border-emerald-800">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-900">
-                      <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-emerald-900 dark:text-emerald-100">Transfer Initiated</p>
-                      <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-1">
-                        Your order is being prepared in the kitchen while we confirm your payment.
-                      </p>
-                    </div>
+            <Card className="bg-status-success-bg border-status-success/20">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-full bg-status-success/10">
+                    <CheckCircle2 className="h-5 w-5 text-status-success" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">Transfer Initiated</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Your order is being prepared in the kitchen while we confirm your payment.
+                    </p>
+                  </div>
                   </div>
                   {paymentClaims[0]?.proof_url && (
                     <div className="mt-4 pt-3 border-t">
