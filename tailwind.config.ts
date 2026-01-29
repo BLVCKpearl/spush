@@ -25,6 +25,11 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          100: "hsl(var(--primary-100))",
+          300: "hsl(var(--primary-300))",
+          500: "hsl(var(--primary-500))",
+          600: "hsl(var(--primary-600))",
+          700: "hsl(var(--primary-700))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -60,6 +65,11 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        status: {
+          success: "hsl(var(--status-success))",
+          warning: "hsl(var(--status-warning))",
+          error: "hsl(var(--status-error))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -67,7 +77,6 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       spacing: {
-        // Large tap targets for mobile
         'tap': '44px',
         'tap-lg': '48px',
       },

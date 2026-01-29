@@ -32,8 +32,8 @@ export default function GuestHeader({
     <header
       className={cn(
         'sticky top-0 z-10 bg-background',
-        // Subtle olive bottom divider (1px, low opacity)
-        'border-b border-primary/10',
+        // Subtle gray bottom divider
+        'border-b border-border',
         className
       )}
     >
