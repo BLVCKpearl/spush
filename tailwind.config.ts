@@ -15,6 +15,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Roboto Mono', 'ui-monospace', 'monospace'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -65,6 +66,10 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        financial: {
+          positive: "hsl(var(--financial-positive))",
+          negative: "hsl(var(--financial-negative))",
+        },
         status: {
           success: "hsl(var(--status-success))",
           "success-foreground": "hsl(var(--status-success-foreground))",
@@ -91,6 +96,10 @@ export default {
       spacing: {
         'tap': '44px',
         'tap-lg': '48px',
+      },
+      boxShadow: {
+        'card': 'var(--card-shadow)',
+        'card-hover': '0 8px 32px rgba(0, 0, 0, 0.08)',
       },
       keyframes: {
         "accordion-down": {
