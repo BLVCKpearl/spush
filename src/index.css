@@ -4,15 +4,19 @@
 
 /* 
  * SPUSH Design System
- * White-first, clean, premium UI
+ * White-first, clean, premium financial dashboard UI
  * 
  * Colors:
  * - Base: White (#FFFFFF) - clean backgrounds
  * - Section: #FAFAFC - subtle section separation
- * - Borders: #E9E9EF - soft dividers
- * - Text Primary: #0B0B0D - near-black readability
- * - Text Secondary: #6B7280 - muted content
+ * - Borders: #E5E7EB - soft dividers
+ * - Text Primary: #0F172A - near-black readability
+ * - Text Secondary: #64748B - muted content
  * - Accent: Gold (#FFC400) - ONLY accent color
+ * 
+ * Financial Colors:
+ * - Positive/Profit: Emerald (#34D399)
+ * - Negative/Loss: Rose (#FB7185)
  * 
  * All colors in HSL format.
  */
@@ -21,21 +25,21 @@
   :root {
     /* Background & Surfaces */
     --background: 0 0% 100%;
-    --foreground: 240 13% 4%;
+    --foreground: 222 47% 11%;
 
     /* Section background - subtle off-white */
     --muted: 240 20% 99%;
-    --muted-foreground: 220 9% 46%;
+    --muted-foreground: 215 16% 47%;
 
-    /* Cards & Popovers - Pure white */
+    /* Cards & Popovers - Pure white with financial styling */
     --card: 0 0% 100%;
-    --card-foreground: 240 13% 4%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 13% 4%;
+    --popover-foreground: 222 47% 11%;
 
     /* Primary - Gold (#FFC400) shades */
     --primary: 46 100% 50%;
-    --primary-foreground: 240 13% 4%;
+    --primary-foreground: 222 47% 11%;
     
     /* Gold shade tokens */
     --primary-100: 46 100% 92%;
@@ -46,34 +50,38 @@
 
     /* Secondary - White with border */
     --secondary: 0 0% 100%;
-    --secondary-foreground: 240 13% 4%;
+    --secondary-foreground: 222 47% 11%;
 
     /* Accent - Light gold for highlights */
     --accent: 46 100% 92%;
-    --accent-foreground: 240 13% 4%;
+    --accent-foreground: 222 47% 11%;
 
     /* Destructive - Red for errors only */
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Borders & Inputs - Soft gray */
-    --border: 240 14% 93%;
-    --input: 240 14% 93%;
+    /* Borders & Inputs - Soft gray (#E5E7EB) */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
     --ring: 46 100% 70%;
 
     /* Radius - 12px rounded corners */
     --radius: 0.75rem;
 
+    /* Financial colors - Semantic tokens */
+    --financial-positive: 160 84% 52%;
+    --financial-negative: 351 94% 71%;
+
     /* Status colors - semantic tokens */
-    --status-success: 142 76% 36%;
+    --status-success: 160 84% 52%;
     --status-success-foreground: 0 0% 100%;
-    --status-success-bg: 142 76% 95%;
+    --status-success-bg: 160 84% 95%;
     --status-warning: 38 92% 50%;
     --status-warning-foreground: 38 92% 20%;
     --status-warning-bg: 38 92% 95%;
-    --status-error: 0 72% 51%;
+    --status-error: 351 94% 71%;
     --status-error-foreground: 0 0% 100%;
-    --status-error-bg: 0 72% 95%;
+    --status-error-bg: 351 94% 95%;
     --status-info: 217 91% 60%;
     --status-info-foreground: 0 0% 100%;
     --status-info-bg: 217 91% 95%;
@@ -81,14 +89,17 @@
     --status-pending-foreground: 25 95% 20%;
     --status-pending-bg: 25 95% 95%;
 
+    /* Card shadow for financial dashboard */
+    --card-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+
     /* Sidebar - Staff dashboard */
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 240 13% 4%;
+    --sidebar-foreground: 222 47% 11%;
     --sidebar-primary: 46 100% 45%;
-    --sidebar-primary-foreground: 240 13% 4%;
+    --sidebar-primary-foreground: 222 47% 11%;
     --sidebar-accent: 46 100% 92%;
-    --sidebar-accent-foreground: 240 13% 4%;
-    --sidebar-border: 240 14% 93%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 220 13% 91%;
     --sidebar-ring: 46 100% 70%;
   }
 
@@ -98,7 +109,7 @@
     --foreground: 0 0% 98%;
 
     --muted: 240 10% 10%;
-    --muted-foreground: 220 9% 60%;
+    --muted-foreground: 215 16% 60%;
 
     --card: 240 10% 8%;
     --card-foreground: 0 0% 98%;
@@ -106,7 +117,7 @@
     --popover-foreground: 0 0% 98%;
 
     --primary: 46 100% 50%;
-    --primary-foreground: 240 13% 4%;
+    --primary-foreground: 222 47% 11%;
     
     --primary-100: 46 40% 15%;
     --primary-300: 46 60% 25%;
@@ -120,22 +131,25 @@
     --accent: 46 40% 15%;
     --accent-foreground: 0 0% 98%;
 
-    --destructive: 0 62% 45%;
+    --destructive: 351 94% 45%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 240 10% 18%;
     --input: 240 10% 18%;
     --ring: 46 100% 50%;
 
-    --status-success: 142 70% 45%;
+    --financial-positive: 160 84% 52%;
+    --financial-negative: 351 94% 71%;
+
+    --status-success: 160 84% 52%;
     --status-success-foreground: 0 0% 100%;
-    --status-success-bg: 142 40% 15%;
+    --status-success-bg: 160 40% 15%;
     --status-warning: 38 92% 50%;
     --status-warning-foreground: 38 92% 90%;
     --status-warning-bg: 38 40% 15%;
-    --status-error: 0 62% 45%;
+    --status-error: 351 94% 71%;
     --status-error-foreground: 0 0% 100%;
-    --status-error-bg: 0 40% 15%;
+    --status-error-bg: 351 40% 15%;
     --status-info: 217 91% 60%;
     --status-info-foreground: 217 91% 90%;
     --status-info-bg: 217 40% 15%;
@@ -143,10 +157,12 @@
     --status-pending-foreground: 25 95% 90%;
     --status-pending-bg: 25 40% 15%;
 
+    --card-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+
     --sidebar-background: 240 10% 6%;
     --sidebar-foreground: 0 0% 98%;
     --sidebar-primary: 46 100% 50%;
-    --sidebar-primary-foreground: 240 13% 4%;
+    --sidebar-primary-foreground: 222 47% 11%;
     --sidebar-accent: 46 40% 12%;
     --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 240 10% 18%;
@@ -178,5 +194,11 @@
 
   .safe-area-pt {
     padding-top: max(0.75rem, env(safe-area-inset-top));
+  }
+
+  /* Mono font utility for financial values */
+  .font-mono-financial {
+    font-family: 'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace;
+    font-feature-settings: 'tnum' on, 'lnum' on;
   }
 }
